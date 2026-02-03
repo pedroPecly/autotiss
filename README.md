@@ -2,25 +2,23 @@
 
 Este projeto é uma solução de automação RPA (Robotic Process Automation) desenvolvida em **Python** com **Selenium WebDriver** para o sistema **NTISS** (Unimed/Neki IT).
 
-O script foi evoluído para funcionar como um "Canivete Suíço", oferecendo um menu interativo para realizar duas tarefas críticas e repetitivas:
-1.  **Vínculo de Logins:** Associa logins de faturistas (`77.hu`) a médicos ativos.
-2.  **Cadastro de Serviços:** Cadastra novos médicos/prestadores em massa a partir de uma lista externa.
+A ferramenta funciona como um "Canivete Suíço" para o setor de TI/Faturamento, oferecendo um menu interativo para automatizar tarefas repetitivas.
 
 ## 🚀 Funcionalidades
 
 ### 1. Modo de Vínculo (Opção 1)
-* **Busca Inteligente:** Varre a lista de prestadores e ignora automaticamente médicos **Inativos** (baseado em ícones visuais).
-* **Verificação de Duplicidade:** Se o login já estiver vinculado, cancela a ação.
-* **Ciclo Infinito:** Permite trocar de secretário/lista sem fechar o robô.
+* **Múltiplos Logins:** Lê o arquivo `logins.txt` e vincula automaticamente uma lista de usuários (ex: `77.hu`, `faturista2`) a cada médico.
+* **Inteligência de Tabela:** Verifica se o login já está marcado. Se faltar algum, ele marca e salva. Se todos já estiverem ok, ele apenas cancela para ganhar tempo.
+* **Detector de Inativos:** Pula automaticamente médicos inativos na lista.
 
 ### 2. Modo de Cadastro (Opção 2)
-* **Leitura de Arquivo:** Lê uma lista de nomes do arquivo `medicos.txt` (um por linha).
-* **Preenchimento Automático:** Seleciona o prestador, marca as permissões de transação ("Visualiza", "Cancela", "Todas") e salva.
-* **Tratamento de AJAX:** Aguarda os carregamentos assíncronos (Modais de "Aguarde") para evitar cliques em falso.
+* **Cadastro em Massa:** Lê nomes do arquivo `medicos.txt` e realiza o cadastro de serviço completo.
+* **Preenchimento Automático:** Seleciona o prestador (com busca exata), aguarda a tabela carregar e marca as permissões ("Visualiza", "Cancela", "Todas").
+* **Sincronia Perfeita:** Sistema de espera inteligente que aguarda o carregamento do AJAX (Tabelas e Modais) para evitar erros de clique.
 
 ### ⚙️ Funcionalidades Globais
-* **⏸️ Sistema de Pausa:** Pressione a tecla `p` no terminal para pausar o robô após a tarefa atual (útil para liberar o mouse).
-* **🛡️ Retry Logic:** Sistema anti-falha que tenta recuperar a interação caso o elemento expire (Stale Element) ou a internet oscile.
+* **🔄 Ciclo Infinito com Hot-Reload:** Ao terminar uma lista, o robô pausa e permite que você edite os arquivos `.txt` (bloco de notas) e troque a página no navegador. Ao dar `ENTER`, ele recarrega os novos dados sem precisar reiniciar o programa.
+* **⏸️ Sistema de Pausa:** Pressione a tecla `p` no terminal a qualquer momento para pausar o robô com segurança entre as ações.
 
 ## 🛠️ Tecnologias
 
@@ -37,12 +35,12 @@ O script foi evoluído para funcionar como um "Canivete Suíço", oferecendo um 
     pip install selenium webdriver-manager
     ```
 
-## 📝 Configuração da Lista de Médicos
+## 📝 Configuração dos Arquivos de Dados
 
-Para usar o **Modo de Cadastro (Opção 2)**, crie um arquivo chamado `medicos.txt` na mesma pasta do script. Insira um nome de médico por linha:
+Crie os seguintes arquivos de texto na mesma pasta do script (um item por linha):
 
+**`medicos.txt`** (Para o Modo 2 - Cadastro)
 ```text
 JOAO DA SILVA
 MARIA SOUZA
-JOSE PEREIRA
 ...
