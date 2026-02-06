@@ -1,46 +1,63 @@
-# 🏥 Automação NTISS - Vínculo e Cadastro Massivo
+````markdown
+# 🏥 Automação NTISS - Vínculo e Cadastro Massivo (JSON Edition)
 
-Este projeto é uma solução de automação RPA (Robotic Process Automation) desenvolvida em **Python** com **Selenium WebDriver** para o sistema **NTISS** (Unimed/Neki IT).
+Solução de automação RPA (Robotic Process Automation) desenvolvida em **Python** com **Selenium WebDriver** para otimizar processos no sistema **NTISS**.
 
-A ferramenta funciona como um "Canivete Suíço" para o setor de TI/Faturamento, oferecendo um menu interativo para automatizar tarefas repetitivas.
+Esta versão (**V24**) utiliza uma arquitetura profissional baseada em **arquivos JSON**, separando configurações, dados e código.
 
 ## 🚀 Funcionalidades
 
 ### 1. Modo de Vínculo (Opção 1)
-* **Múltiplos Logins:** Lê o arquivo `logins.txt` e vincula automaticamente uma lista de usuários (ex: `77.hu`, `faturista2`) a cada médico.
-* **Inteligência de Tabela:** Verifica se o login já está marcado. Se faltar algum, ele marca e salva. Se todos já estiverem ok, ele apenas cancela para ganhar tempo.
-* **Detector de Inativos:** Pula automaticamente médicos inativos na lista.
+* **Multi-Login:** Lê a lista `logins_para_vincular` do arquivo `dados.json`.
+* **Fluxo Inteligente:** Itera sobre cada login, verifica se já está vinculado ao médico e salva apenas se houver alterações.
+* **Detecção de Inativos:** Pula automaticamente médicos inativos na listagem visual.
 
 ### 2. Modo de Cadastro (Opção 2)
-* **Cadastro em Massa:** Lê nomes do arquivo `medicos.txt` e realiza o cadastro de serviço completo.
-* **Preenchimento Automático:** Seleciona o prestador (com busca exata), aguarda a tabela carregar e marca as permissões ("Visualiza", "Cancela", "Todas").
-* **Sincronia Perfeita:** Sistema de espera inteligente que aguarda o carregamento do AJAX (Tabelas e Modais) para evitar erros de clique.
+* **Cadastro Estruturado:** Lê a lista `medicos_para_cadastrar` do arquivo `dados.json`.
+* **Seleção Precisa:** Utiliza busca exata no dropdown do PrimeFaces.
+* **Sincronia Total:** Aguarda o carregamento da tabela de transações via AJAX antes de tentar marcar opções.
+* **Marcação Obsessiva:** Garante que as checkboxes ("Visualiza", "Cancela") foram marcadas verificando a classe CSS `ui-state-active`.
 
 ### ⚙️ Funcionalidades Globais
-* **🔄 Ciclo Infinito com Hot-Reload:** Ao terminar uma lista, o robô pausa e permite que você edite os arquivos `.txt` (bloco de notas) e troque a página no navegador. Ao dar `ENTER`, ele recarrega os novos dados sem precisar reiniciar o programa.
-* **⏸️ Sistema de Pausa:** Pressione a tecla `p` no terminal a qualquer momento para pausar o robô com segurança entre as ações.
+* **Configuração Centralizada:** URL do sistema e Timeouts configuráveis via `config.json`.
+* **Hot-Reload:** Ao terminar um ciclo, você pode editar o `dados.json`, salvar e pressionar ENTER para o robô processar os novos dados sem reiniciar.
+* **Tratamento de Erros:** Validação de sintaxe JSON para evitar crashes por formatação incorreta.
 
-## 🛠️ Tecnologias
-
-* Python 3.x
-* Selenium WebDriver
-* WebDriver Manager (Chrome)
-* Biblioteca `msvcrt` (Interface de Teclado Windows)
-
-## 📦 Instalação
+## 🛠️ Instalação
 
 1.  Clone o repositório.
-2.  Crie um ambiente virtual e instale as dependências:
+2.  Instale as dependências:
     ```bash
     pip install selenium webdriver-manager
     ```
 
-## 📝 Configuração dos Arquivos de Dados
+## 📝 Configuração (Arquivos JSON)
 
-Crie os seguintes arquivos de texto na mesma pasta do script (um item por linha):
+Para o robô funcionar, você precisa criar dois arquivos na raiz do projeto:
 
-**`medicos.txt`** (Para o Modo 2 - Cadastro)
-```text
-JOAO DA SILVA
-MARIA SOUZA
-...
+### 1. `config.json` (Configurações do Sistema)
+```json
+{
+  "url_sistema": "[https://ntiss.neki-it.com.br/ntiss/login.jsf](https://ntiss.neki-it.com.br/ntiss/login.jsf)",
+  "timeout_aguarde": 40
+}
+```
+
+### 3. `dados.json` (exemplo)
+
+O arquivo `dados.json` contém os dados que o robô irá processar: logins a vincular e a lista de médicos a cadastrar. Exemplo de estrutura válida:
+
+```json
+{
+  "logins_para_vincular": [
+    "77.usuario"
+  ],
+  "medicos_para_cadastrar": [
+    "JOAO DA SILVA",
+    "MARIA SOUZA",
+    "JOSE PEREIRA"
+  ]
+}
+```
+
+Salve o arquivo na raiz do projeto como `dados.json`. Lembre-se: JSON puro não aceita comentários — use campos como `_comment` se precisar anotar algo no próprio arquivo.
