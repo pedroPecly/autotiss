@@ -34,7 +34,7 @@ def carregar_json(caminho):
 
 CONF = carregar_json(ARQUIVO_CONFIG)
 if not CONF:
-    CONF = {"url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf", "timeout_aguarde": 40}
+    raise SystemExit("Arquivo 'config.json' ausente ou inválido. Crie 'config.json' com 'url_sistema' e 'timeout_aguarde'.")
 
 URL_SISTEMA = CONF.get("url_sistema")
 TIMEOUT_AGUARDE = CONF.get("timeout_aguarde", 40)
