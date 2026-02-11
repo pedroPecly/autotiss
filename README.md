@@ -1,33 +1,86 @@
-# 🏥 Automação NTISS - Navegação e Vínculo (V27 - Full Integration)
+# 🏥 Automação NTISS - Navegação e Vínculo (V27)
 
-Solução de automação RPA (Robotic Process Automation) desenvolvida em **Python** com **Selenium WebDriver**. 
+Projeto de automação (RPA) em Python que utiliza Selenium WebDriver para automatizar cadastro, vínculo e criação de serviços no sistema NTISS.
 
-Esta versão (**V27**) introduz a **Navegação Autônoma**, permitindo que o robô pesquise secretarias, entre no cadastro, realize as tarefas e retorne para processar a próxima da lista automaticamente.
+## 🚀 Visão Geral
 
-## 🚀 Funcionalidades
+A versão V27 introduz Navegação Autônoma: o robô percorre uma lista de secretarias (logins), abre cada cadastro, executa a ação configurada (vínculo ou cadastro de serviços) e segue automaticamente para a próxima secretaria.
 
-### 🔄 1. Navegação Automática (Novo)
-- **Ciclo Completo:** O robô lê uma lista de secretarias, pesquisa o login na tela inicial, entra no modo de edição e, ao finalizar, clica em "Cancelar" para buscar a próxima.
-- **Proteção de Modais:** Detecta janelas de carregamento ("Aguarde") e sobreposições (overlays) do PrimeFaces para evitar cliques falsos.
+## ✨ Funcionalidades principais
 
-### 🔗 2. Modo de Vínculo (Opção 1)
-- **Multi-Login:** Lê a lista `logins_para_vincular` e associa aos médicos da secretaria atual.
-- **Filtro Inteligente:** Digita letra por letra no filtro do dropdown para garantir a renderização dos itens.
-- **Verificação de Estado:** Só clica em "Salvar" se houver alterações reais; caso contrário, apenas cancela o modal.
+- Navegação automática entre logins definidos em `dados.json` (`secretarias_para_pesquisar`).
+- Modo Vínculo: vincula usuários da lista `logins_para_vincular` aos médicos da secretaria.
+- Modo Cadastro de Serviços: cria serviços em massa usando os nomes em `medicos_para_cadastrar`.
+- Detecção e espera por modais/overlays para evitar cliques incorretos.
+- Cliques efetuados via injeção JavaScript quando necessário para driblar elementos invisíveis.
+- Hot-reload de `dados.json`: alterações podem ser aplicadas entre ciclos sem reiniciar o script.
+- Pausa manual: pressione `P` no terminal para pausar a execução de forma segura.
 
-### 📝 3. Modo de Cadastro de Serviços (Opção 2)
-- **Criação em Massa:** Clica em "Criar Serviço", seleciona o médico da lista `medicos_para_cadastrar` e marca as permissões necessárias.
-- **Marcação Garantida:** Verifica via classe CSS (`ui-state-active`) se as checkboxes ("Visualiza", "Cancela") foram realmente marcadas.
+## 🛠️ Requisitos
 
-### ⚙️ Funcionalidades Globais
-- **Cliques via JavaScript:** Todos os cliques utilizam injeção de JS para ignorar elementos invisíveis que bloqueiam a interface.
-- **Pausa Manual:** Pressione a tecla **`P`** no terminal a qualquer momento para pausar o robô com segurança.
-- **Hot-Reload:** É possível editar o `dados.json` entre os ciclos sem fechar o script.
+- Python 3.8+
+- Navegador Chrome ou Firefox (compatível com `webdriver-manager`)
+- Dependências (instale via requirements ou manualmente):
 
-## 🛠️ Instalação
+```bash
+pip install -r requirements.txt
+```
 
-1. Clone o repositório.
-2. Instale as dependências:
+ou
 
 ```bash
 pip install selenium webdriver-manager
+```
+
+## ⚙️ Configuração
+
+Coloque `config.json` e `dados.json` na raiz do projeto.
+
+- Exemplo de `config.json`:
+
+```json
+{
+  "url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf",
+  "timeout_aguarde": 40
+}
+```
+
+- Exemplo de `dados.json` (V27):
+
+```json
+{
+  "secretarias_para_pesquisar": [
+    "77.mrios",
+    "77.joana",
+    "77.toliveira"
+  ],
+  "logins_para_vincular": [
+    "77.hu",
+    "77.suporte"
+  ],
+  "medicos_para_cadastrar": [
+    "JOAO DA SILVA",
+    "MARIA SOUZA"
+  ]
+}
+```
+
+Descrição dos campos:
+
+- `secretarias_para_pesquisar`: logins que o robô buscará na tela principal para navegar entre cadastros.
+- `logins_para_vincular`: usuários que serão vinculados dentro do cadastro (Modo Vínculo).
+- `medicos_para_cadastrar`: nomes que receberão serviços (Modo Cadastro de Serviços).
+
+## ⚠️ Cuidados durante a execução
+
+- Não minimize a janela do navegador — isso pode pausar a renderização e causar timeouts.
+- Não bloqueie a sessão do Windows (Win+L) durante a execução.
+- Evite usar o mouse/teclado quando o script estiver digitando ou clicando elementos críticos.
+
+## 🔎 Como executar
+
+```bash
+python autotiss.py
+```
+
+Pressione `P` no terminal para pausar o robô.
