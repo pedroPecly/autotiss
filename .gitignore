@@ -29,9 +29,5 @@ Thumbs.db
 
 # Python local env
 .env
-medicos.txt
-medicos2.txt
-abcdefg.txt
-logins.txt
-config.json
-dados.json
+*.txt
+*.json
