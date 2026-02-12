@@ -1,7 +1,7 @@
 """
-🏥 AUTOMATION TOOLKIT - NTISS (V27 - FULL INTEGRATION)
-------------------------------------------------------
-Descrição: Fusão completa da V24 (Lógica de Negócio) com a V25 (Navegação).
+🏥 AUTOMATION TOOLKIT - NTISS (V29 - AUTO LOGIN)
+------------------------------------------------
+Descrição: V28 com Login Automático adicionado.
 Autor: Pedro Henrique + Gemini
 """
 
@@ -34,12 +34,14 @@ def carregar_json(caminho):
 
 CONF = carregar_json(ARQUIVO_CONFIG)
 if not CONF:
-    raise SystemExit("Arquivo 'config.json' ausente ou inválido. Crie 'config.json' com 'url_sistema' e 'timeout_aguarde'.")
+    CONF = {"url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf", "timeout_aguarde": 40}
 
 URL_SISTEMA = CONF.get("url_sistema")
 TIMEOUT_AGUARDE = CONF.get("timeout_aguarde", 40)
+USUARIO_LOGIN = CONF.get("usuario", "")
+SENHA_LOGIN = CONF.get("senha", "")
 
-# --- HELPERS (DO SEU CÓDIGO ORIGINAL) ---
+# --- HELPERS ---
 
 def log(mensagem):
     hora = datetime.now().strftime("%H:%M:%S")
@@ -54,12 +56,11 @@ def checar_pausa():
             log("Retomando...")
 
 def esperar_aguarde_sumir(driver):
-    time.sleep(0.3)
+    time.sleep(0.2)
     try:
         WebDriverWait(driver, TIMEOUT_AGUARDE).until(
             EC.invisibility_of_element_located((By.ID, "aguarde"))
         )
-        time.sleep(0.3)
     except: pass
 
 def clicar_js(driver, elemento, nome="Elemento"):
@@ -70,82 +71,81 @@ def fechar_janelas_travadas(driver):
     try: webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
     except: pass
 
-# --- FUNÇÕES DE NAVEGAÇÃO (NOVAS - O PASSO A PASSO QUE VOCÊ PEDIU) ---
+# --- FUNÇÃO DE LOGIN AUTOMÁTICO (NOVA) ---
+
+def realizar_login_automatico(driver):
+    log("🔑 Iniciando Login Automático...")
+    try:
+        # Preenche Usuário
+        WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "login")))
+        driver.find_element(By.ID, "login").clear()
+        driver.find_element(By.ID, "login").send_keys(USUARIO_LOGIN)
+        
+        # Preenche Senha
+        driver.find_element(By.ID, "senha").clear()
+        driver.find_element(By.ID, "senha").send_keys(SENHA_LOGIN)
+        
+        # Clica em Entrar
+        # Tenta pelo ID do botão 'botaoEntrar' (pai do span)
+        try:
+            btn = driver.find_element(By.ID, "botaoEntrar")
+            clicar_js(driver, btn, "Botão Entrar")
+        except:
+            # Fallback para o Span com texto
+            btn = driver.find_element(By.XPATH, "//span[contains(text(),'Entrar')]")
+            clicar_js(driver, btn, "Botão Entrar (Span)")
+            
+        esperar_aguarde_sumir(driver)
+        log("✅ Login enviado!")
+        
+    except Exception as e:
+        log(f"❌ Erro no login automático: {e}")
+        print("   -> Faça o login manualmente.")
+
+# --- FUNÇÕES DE NAVEGAÇÃO ---
 
 def navegar_pesquisar_secretaria(driver, login_secretaria):
-    """
-    Passo 1: Pesquisa o login na tela principal e clica no lápis.
-    """
     log(f"🔍 [NAVEGAÇÃO] Pesquisando: {login_secretaria}")
     esperar_aguarde_sumir(driver)
-    
     try:
-        # 1. Limpa e Digita o Login
-        # Procura o input pelo ID (j_idt129) ou genericamente
-        try:
-            campo = driver.find_element(By.ID, "j_idt129")
-        except:
-            # Fallback: Input após o label 'Login'
-            campo = driver.find_element(By.XPATH, "//label[contains(text(),'Login')]/following::input[1]")
-            
+        try: campo = driver.find_element(By.ID, "j_idt129")
+        except: campo = driver.find_element(By.XPATH, "//label[contains(text(),'Login')]/following::input[1]")
         campo.clear()
         campo.send_keys(login_secretaria)
         time.sleep(0.5)
         
-        # 2. Clica em Pesquisar
-        try:
-            btn_pesquisar = driver.find_element(By.XPATH, "//button[span[text()='Pesquisar']]")
-        except:
-            btn_pesquisar = driver.find_element(By.CSS_SELECTOR, "button[title='Pesquisar']")
-            
-        clicar_js(driver, btn_pesquisar, "Pesquisar")
-        esperar_aguarde_sumir(driver)
-        time.sleep(1.0)
+        try: btn = driver.find_element(By.XPATH, "//button[span[text()='Pesquisar']]")
+        except: btn = driver.find_element(By.CSS_SELECTOR, "button[title='Pesquisar']")
+        clicar_js(driver, btn, "Pesquisar")
         
-        # 3. Clica no Lápis do resultado
-        try:
-            btn_lapis = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "img[title='Alterar']"))
-            )
-            clicar_js(driver, btn_lapis, "Editar Usuário")
-            esperar_aguarde_sumir(driver)
-            log("   -> Entrei no cadastro.")
-            return True
-        except:
-            log(f"   [AVISO] Usuário '{login_secretaria}' não encontrado na pesquisa.")
-            return False
-            
-    except Exception as e:
-        log(f"   [ERRO NAVEGAÇÃO] {e}")
+        esperar_aguarde_sumir(driver)
+        time.sleep(0.8)
+        
+        btn_lapis = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "img[title='Alterar']")))
+        clicar_js(driver, btn_lapis, "Editar")
+        esperar_aguarde_sumir(driver)
+        return True
+    except:
+        log(f"   [AVISO] '{login_secretaria}' não encontrado/erro.")
         return False
 
 def voltar_para_pesquisa(driver):
-    """
-    Passo Final: Clica no Cancelar da página para voltar.
-    """
-    log("🔙 [NAVEGAÇÃO] Voltando para pesquisa...")
+    log("🔙 [NAVEGAÇÃO] Voltando...")
     try:
         fechar_janelas_travadas(driver)
         esperar_aguarde_sumir(driver)
-        
-        # Busca o botão Cancelar do rodapé (j_idt221 ou via texto)
         xpath_cancelar = "//button[span[text()='Cancelar']][not(ancestor::div[contains(@class,'ui-dialog')])]"
-        
         try:
-            btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, xpath_cancelar)))
-            clicar_js(driver, btn, "Cancelar (Voltar)")
+            btn = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, xpath_cancelar)))
+            clicar_js(driver, btn, "Cancelar Voltar")
         except:
-            # Tenta pelo ID específico que você mandou
-            btn = driver.find_element(By.ID, "j_idt221") 
-            clicar_js(driver, btn, "Cancelar ID Fixo")
-
+            try: driver.find_element(By.ID, "j_idt221").click()
+            except: pass
         esperar_aguarde_sumir(driver)
-        
-    except Exception as e:
-        log(f"   [ERRO AO VOLTAR] {e}")
+    except: pass
 
 # ==============================================================================
-# LÓGICA V24 - MODO 1: VINCULAR LOGINS (RESTAURADA INTEGRALMENTE)
+# MODO 1: VINCULAR (Mantido V28)
 # ==============================================================================
 
 def verificar_status_medico(driver, botao_lapis):
@@ -153,248 +153,185 @@ def verificar_status_medico(driver, botao_lapis):
         linha = botao_lapis.find_element(By.XPATH, "./ancestor::tr")
         if any(img.is_displayed() for img in linha.find_elements(By.CSS_SELECTOR, "img[src*='inativar.png']")): return True 
         if any(img.is_displayed() for img in linha.find_elements(By.CSS_SELECTOR, "img[src*='ativar.png']")): return False 
-        texto = linha.text
-        if "Sim" in texto: return True 
-        if "Não" in texto: return False 
-        return True 
+        if "Sim" in linha.text: return True 
+        return False
     except: return True 
 
-def tentar_clicar_lapis(driver, index):
-    for tentativa in range(3):
-        try:
-            botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
-            if index >= len(botoes): return "ERRO"
-            botao = botoes[index]
-            if not verificar_status_medico(driver, botao): return "INATIVO"
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao)
-            time.sleep(0.5)
-            botao.click()
-            return "CLICADO"
-        except StaleElementReferenceException: time.sleep(1)
-        except: 
-            try: clicar_js(driver, botao, f"Lápis {index}"); return "CLICADO"
-            except: pass
-    return "ERRO"
-
-def tentar_abrir_dropdown_logins(driver):
-    div_dropdown = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[id$=':escolherLogins']")))
-    for tentativa in range(1, 4):
-        try:
-            if tentativa == 1: div_dropdown.find_element(By.CSS_SELECTOR, ".ui-selectcheckboxmenu-trigger").click()
-            elif tentativa == 2: div_dropdown.find_element(By.CSS_SELECTOR, ".ui-selectcheckboxmenu-label").click()
-            elif tentativa == 3: driver.execute_script("arguments[0].click();", div_dropdown)
-            time.sleep(1.5)
-            campo = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-filter-container input")
-            if campo.is_displayed(): return campo
-        except: pass
-    raise Exception("Dropdown Logins não abriu.")
-
 def executar_logica_vincular_logins(driver, lista_logins):
-    """
-    Lógica da V24 adaptada para rodar UMA VEZ na tela atual.
-    """
     try:
-        botoes_lapis = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
-        total = len(botoes_lapis)
-        
-        if total == 0:
-            log("   [V24] Nenhum médico encontrado nesta tela.")
-            return
+        botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
+        if not botoes: return
+        total_proc = len(botoes) - 1 if len(botoes) > 1 else len(botoes)
+        log(f"   [VINCULAR] Processando {total_proc} médicos...")
 
-        total_processar = total - 1 if total > 1 else total
-        log(f"   [V24] Processando {total_processar} médicos...")
-
-        for i in range(total_processar):
+        for i in range(total_proc):
             log(f"   --- Médico {i+1} ---")
             checar_pausa()
             try:
-                # 1. Abre modal
-                res = tentar_clicar_lapis(driver, i)
-                if res == "INATIVO": 
-                    log("   -> Inativo. Pulando.")
+                botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
+                if i >= len(botoes): break
+                botao = botoes[i]
+                if not verificar_status_medico(driver, botao): 
+                    log("   -> Inativo.")
                     continue
-                elif res == "ERRO": continue
                 
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao)
+                time.sleep(0.3)
+                try: botao.click()
+                except: clicar_js(driver, botao, "Lapis")
                 esperar_aguarde_sumir(driver)
                 
-                # 2. Dropdown
                 try:
-                    campo = tentar_abrir_dropdown_logins(driver)
-                    houve_alteracao = False 
+                    div = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[id$=':escolherLogins']")))
+                    try: div.find_element(By.CSS_SELECTOR, ".ui-selectcheckboxmenu-trigger").click()
+                    except: driver.execute_script("arguments[0].click();", div)
+                    time.sleep(1.0)
                     
-                    for login_alvo in lista_logins:
+                    campo = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-filter-container input")
+                    houve_alt = False
+                    for login in lista_logins:
                         campo.clear()
-                        campo.send_keys(login_alvo)
-                        time.sleep(1.5)
-                        
-                        chk_header = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-header .ui-chkbox-box")
-                        if "ui-state-active" not in chk_header.get_attribute("class"):
-                            chk_header.click()
-                            time.sleep(0.5)
-                            log(f"      + Vinculado: {login_alvo}")
-                            houve_alteracao = True
-                        
-                    driver.find_element(By.CSS_SELECTOR, "a.ui-selectcheckboxmenu-close").click()
+                        campo.send_keys(login)
+                        time.sleep(1.0)
+                        try:
+                            chk = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-header .ui-chkbox-box")
+                            if "ui-state-active" not in chk.get_attribute("class"):
+                                chk.click()
+                                houve_alt = True
+                                log(f"      + Vinculado: {login}")
+                        except: pass
+                    
+                    try: driver.find_element(By.CSS_SELECTOR, "a.ui-selectcheckboxmenu-close").click()
+                    except: pass
                     time.sleep(0.5)
 
-                    if houve_alteracao:
-                        btn = driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Salvar']")
-                        clicar_js(driver, btn, "Salvar")
-                    else:
-                        btn = driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']")
-                        clicar_js(driver, btn, "Cancelar")
-                    
+                    if houve_alt: clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Salvar']"), "Salvar")
+                    else: clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']"), "Cancelar")
                     esperar_aguarde_sumir(driver)
-                except Exception as e:
-                    log(f"   Erro modal: {e}")
-                    fechar_janelas_travadas(driver)
-                    esperar_aguarde_sumir(driver)
-
-            except Exception as e:
-                log(f"   Erro loop: {e}")
-                fechar_janelas_travadas(driver)
+                except: fechar_janelas_travadas(driver)
+            except: fechar_janelas_travadas(driver)
     except: pass
 
 # ==============================================================================
-# LÓGICA V24 - MODO 2: CADASTRAR SERVIÇOS (RESTAURADA INTEGRALMENTE)
+# MODO 2: CADASTRAR SERVIÇOS (Mantido V28)
 # ==============================================================================
 
-def selecionar_item_combo(driver, nome_medico):
-    xpath_item = f"//div[contains(@id, 'prestadorFuncionario_panel')]//li[contains(., '{nome_medico}')]"
+def selecionar_item_otimizado(driver, nome_medico, timeout=3):
+    xpath = f"//div[contains(@id, 'prestadorFuncionario_panel')]//li[contains(., '{nome_medico}')]"
     try:
-        item = WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.XPATH, xpath_item)))
+        item = WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.XPATH, xpath)))
         item.click()
         return True
-    except:
-        try:
-            item = driver.find_element(By.XPATH, xpath_item)
-            driver.execute_script("arguments[0].click();", item)
-            return True
-        except: return False
+    except: return False
 
 def garantir_checkbox(driver, texto_label):
     listas = [
         f"//tr[.//label[contains(text(), '{texto_label}')]]//div[contains(@class, 'ui-chkbox-box')]",
-        f"//label[contains(text(), '{texto_label}')]/..//div[contains(@class, 'ui-chkbox-box')]",
-        f"//label[contains(text(), '{texto_label}')]/preceding-sibling::div[contains(@class, 'ui-chkbox-box')]"
+        f"//label[contains(text(), '{texto_label}')]/..//div[contains(@class, 'ui-chkbox-box')]"
     ]
     for xpath in listas:
         try:
             chk = WebDriverWait(driver, 1).until(EC.presence_of_element_located((By.XPATH, xpath)))
-            if "ui-state-active" in chk.get_attribute("class"): return True 
-            clicar_js(driver, chk, texto_label)
-            time.sleep(0.3)
-            if "ui-state-active" in chk.get_attribute("class"): return True
+            if "ui-state-active" not in chk.get_attribute("class"):
+                clicar_js(driver, chk, texto_label)
+                time.sleep(0.2)
         except: continue
-    return False
 
 def executar_logica_cadastrar_servicos(driver, medicos):
-    """
-    Lógica da V24 para Cadastrar Serviços (Vincular Médicos).
-    """
-    log(f"   [V24] Iniciando cadastro de {len(medicos)} médicos...")
-    erros = []
+    log(f"   [CADASTRAR] Iniciando lista de {len(medicos)} médicos...")
+    modal_aberto = False
     
     for index, nome_medico in enumerate(medicos):
         log(f"   --- [{index+1}/{len(medicos)}] {nome_medico} ---")
         checar_pausa()
         try:
-            # 1. Clicar em Criar Serviço
+            if not modal_aberto:
+                try:
+                    btn_criar = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[span[text()='Criar Serviço']]")))
+                    clicar_js(driver, btn_criar, "Criar Serviço")
+                    esperar_aguarde_sumir(driver)
+                    modal_aberto = True
+                except:
+                    log("      [ERRO] Não consegui abrir o modal 'Criar Serviço'.")
+                    continue
+
             try:
-                btn_criar = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[span[text()='Criar Serviço']]")))
-                clicar_js(driver, btn_criar, "Criar Serviço")
+                driver.find_element(By.CSS_SELECTOR, "div[id$=':prestadorFuncionario'] .ui-selectonemenu-trigger").click()
+                campo_filtro = WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div[id$=':prestadorFuncionario_panel'] input")))
+                campo_filtro.clear()
+                campo_filtro.send_keys(nome_medico)
+                time.sleep(1.0)
+                
+                encontrou = selecionar_item_otimizado(driver, nome_medico, timeout=3)
+                if not encontrou:
+                    log("      [JÁ CADASTRADO] Médico não apareceu na lista.")
+                    try: driver.find_element(By.TAG_NAME, 'body').click() 
+                    except: pass
+                    continue 
+
+                try: WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div.ui-datatable")))
+                except: pass
+
+                garantir_checkbox(driver, "Visualiza transações")
+                garantir_checkbox(driver, "Cancela/Exclui")
+                
+                try:
+                    chk_todas = driver.find_element(By.XPATH, "//div[contains(@class, 'ui-datatable-scrollable-header')]//div[contains(@class, 'ui-chkbox-box')]")
+                    if "ui-state-active" not in chk_todas.get_attribute("class"):
+                        clicar_js(driver, chk_todas, "Check Todas")
+                except: pass
+                
+                btn_salvar = driver.find_element(By.XPATH, "//span[text()='Salvar']")
+                clicar_js(driver, btn_salvar, "Salvar")
                 esperar_aguarde_sumir(driver)
-            except:
-                log("      [ERRO] Botão 'Criar Serviço' não encontrado.")
-                continue
-
-            # 2. Selecionar Prestador
-            driver.find_element(By.CSS_SELECTOR, "div[id$=':prestadorFuncionario'] .ui-selectonemenu-trigger").click()
-            time.sleep(1)
-            campo_filtro = WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div[id$=':prestadorFuncionario_panel'] input")))
-            campo_filtro.clear()
-            campo_filtro.send_keys(nome_medico)
-            time.sleep(2.0)
-            
-            if not selecionar_item_combo(driver, nome_medico):
-                log("      [AVISO] Médico não encontrado no dropdown.")
+                log("      -> Sucesso (Cadastrado).")
+                modal_aberto = False
+                
+            except Exception as e:
+                log(f"      [ERRO INTERNO] {e}")
                 fechar_janelas_travadas(driver)
-                erros.append(nome_medico)
-                continue
-            
-            # 3. Esperar Tabela e Checkboxes
-            try:
-                WebDriverWait(driver, 15).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div.ui-datatable")))
-            except: log("      [ALERTA] Tabela demorou.")
-
-            garantir_checkbox(driver, "Visualiza transações")
-            garantir_checkbox(driver, "Cancela/Exclui")
-            
-            try:
-                chk_todas = driver.find_element(By.XPATH, "//div[contains(@class, 'ui-datatable-scrollable-header')]//div[contains(@class, 'ui-chkbox-box')]")
-                if "ui-state-active" not in chk_todas.get_attribute("class"):
-                    clicar_js(driver, chk_todas, "Check Todas")
-            except: pass
-            
-            time.sleep(0.5)
-
-            # 4. Salvar
-            btn_salvar = driver.find_element(By.XPATH, "//span[text()='Salvar']")
-            clicar_js(driver, btn_salvar, "Salvar")
-            esperar_aguarde_sumir(driver)
-            log("      -> Sucesso.")
+                modal_aberto = False
 
         except Exception as e:
             log(f"      [ERRO CRÍTICO] {e}")
             fechar_janelas_travadas(driver)
-            erros.append(nome_medico)
-            
-    if erros: log(f"   Erros no ciclo: {erros}")
+            modal_aberto = False
+
+    if modal_aberto:
+        log("   Finalizando lista, fechando modal restante...")
+        try:
+            btn_cancelar = driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']")
+            clicar_js(driver, btn_cancelar, "Cancelar Modal Final")
+            esperar_aguarde_sumir(driver)
+        except: fechar_janelas_travadas(driver)
 
 # ==============================================================================
-# LOOP PRINCIPAL (NAVIGATION WRAPPER)
+# MAIN
 # ==============================================================================
 
 def executar_robo_completo(driver):
     while True:
-        print("\n--- MENU V27 (NAVEGAÇÃO + V24 INTEGRAL) ---")
-        print(" 1 - Vincular Logins (Pesquisa + Edita + Vincula)")
-        print(" 2 - Cadastrar Serviços (Pesquisa + Cria + Cadastra)")
+        print("\n--- MENU V29 (AUTO LOGIN) ---")
+        print(" 1 - Vincular Logins")
+        print(" 2 - Cadastrar Serviços (Otimizado)")
         print(" 0 - Sair")
         op = input(">>> Escolha: ").strip()
-        
         if op == '0': break
         
-        # Carrega dados
         dados = carregar_json(ARQUIVO_DADOS)
         secretarias = dados.get("secretarias_para_pesquisar", [])
-        
         if not secretarias:
-            log("[ERRO] Lista 'secretarias_para_pesquisar' vazia!")
+            log("[ERRO] Lista de secretarias vazia!")
             continue
 
-        logins_vincular = dados.get("logins_para_vincular", [])
-        medicos_cadastrar = dados.get("medicos_para_cadastrar", [])
-
-        # LOOP DE NAVEGAÇÃO
-        total = len(secretarias)
         for idx, sec in enumerate(secretarias):
-            log(f"\n=========================================")
-            log(f" SECRETARIA [{idx+1}/{total}]: {sec}")
-            log(f"=========================================")
-            
-            # 1. NAVEGAR
-            entrou = navegar_pesquisar_secretaria(driver, sec)
-            if not entrou: continue
-            
-            # 2. EXECUTAR A TAREFA ESCOLHIDA
-            if op == '1':
-                executar_logica_vincular_logins(driver, logins_vincular)
-            elif op == '2':
-                executar_logica_cadastrar_servicos(driver, medicos_cadastrar)
-            
-            # 3. VOLTAR
-            voltar_para_pesquisa(driver)
+            log(f"\n=== SECRETARIA [{idx+1}/{len(secretarias)}]: {sec} ===")
+            if navegar_pesquisar_secretaria(driver, sec):
+                if op == '1':
+                    executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []))
+                elif op == '2':
+                    executar_logica_cadastrar_servicos(driver, dados.get("medicos_para_cadastrar", []))
+                voltar_para_pesquisa(driver)
 
         print("\nCICLO FINALIZADO! ENTER para menu...")
         input()
@@ -404,8 +341,17 @@ if __name__ == "__main__":
     driver.maximize_window()
     driver.get(URL_SISTEMA)
     
-    print("\n>>> FAÇA LOGIN E VÁ PARA A TELA DE PESQUISA.")
-    input(">>> ENTER PARA COMEÇAR...")
+    # --- NOVO BLOCO DE LOGIN AUTOMÁTICO ---
+    if USUARIO_LOGIN and SENHA_LOGIN:
+        realizar_login_automatico(driver)
+    else:
+        print(">>> [AVISO] Usuário/Senha não configurados no JSON. Faça login manual.")
+
+    print("\n" + "="*50)
+    print(" >>> NAVEGUE ATÉ A TELA DE 'CONSULTA DE FUNCIONÁRIOS' <<<")
+    print(" >>> QUANDO ESTIVER VENDO O CAMPO DE PESQUISA, DÊ ENTER <<<")
+    print("="*50)
+    input()
     
     executar_robo_completo(driver)
     driver.quit()

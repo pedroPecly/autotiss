@@ -1,86 +1,124 @@
-# 🏥 Automação NTISS - Navegação e Vínculo (V27)
+# 🏥 Automação NTISS — Vínculo e Cadastro Massivo (JSON)
 
-Projeto de automação (RPA) em Python que utiliza Selenium WebDriver para automatizar cadastro, vínculo e criação de serviços no sistema NTISS.
+Descrição: automação RPA em Python (Selenium) para login automático, vínculo de logins e cadastro massivo de médicos no sistema NTISS.
 
-## 🚀 Visão Geral
+---
 
-A versão V27 introduz Navegação Autônoma: o robô percorre uma lista de secretarias (logins), abre cada cadastro, executa a ação configurada (vínculo ou cadastro de serviços) e segue automaticamente para a próxima secretaria.
+## Sumário
 
-## ✨ Funcionalidades principais
+- [Visão geral](#visão-geral)
+- [Funcionalidades](#funcionalidades)
+- [Requisitos](#requisitos)
+- [Instalação](#instalação)
+- [Configuração](#configuração)
+- [Execução](#execução)
+- [Estrutura do projeto](#estrutura-do-projeto)
+- [Segurança e .gitignore](#segurança-e-gitignore)
+- [Solução de problemas](#solução-de-problemas)
+- [Contribuição](#contribuição)
 
-- Navegação automática entre logins definidos em `dados.json` (`secretarias_para_pesquisar`).
-- Modo Vínculo: vincula usuários da lista `logins_para_vincular` aos médicos da secretaria.
-- Modo Cadastro de Serviços: cria serviços em massa usando os nomes em `medicos_para_cadastrar`.
-- Detecção e espera por modais/overlays para evitar cliques incorretos.
-- Cliques efetuados via injeção JavaScript quando necessário para driblar elementos invisíveis.
-- Hot-reload de `dados.json`: alterações podem ser aplicadas entre ciclos sem reiniciar o script.
-- Pausa manual: pressione `P` no terminal para pausar a execução de forma segura.
+---
 
-## 🛠️ Requisitos
+## Visão geral
+
+Este projeto (versões V24/V29) automatiza tarefas repetitivas no NTISS: autenticação, navegação entre telas, vínculo de logins a médicos e cadastro massivo. A configuração e os dados ficam separados em arquivos JSON (`config.json`, `dados.json`).
+
+## Funcionalidades
+
+- Login automático a partir de credenciais em `config.json`.
+- Modo Vínculo: processa `logins_para_vincular` e evita regravações desnecessárias.
+- Modo Cadastro: processa `medicos_para_cadastrar`, com busca/seleção precisa em componentes PrimeFaces e espera por carregamento AJAX.
+- Navegação resiliente: detecta falhas de pesquisa, pula itens e continua o ciclo.
+- Ações via JavaScript para contornar overlays e elementos inacessíveis.
+- Hot-reload básico: editar `dados.json` e iniciar novo ciclo (quando o script suportar).
+- Pausa manual segura (ex.: tecla para pausar no terminal).
+
+## Requisitos
 
 - Python 3.8+
-- Navegador Chrome ou Firefox (compatível com `webdriver-manager`)
-- Dependências (instale via requirements ou manualmente):
+- Navegador compatível (Chrome/Edge/Firefox) e driver correspondente
+- Dependências Python (recomendado via `requirements.txt`)
+
+## Instalação
+
+1. Clone o repositório.
+2. Crie e ative um ambiente virtual (opcional, recomendado).
+3. Instale dependências:
 
 ```bash
 pip install -r requirements.txt
-```
-
-ou
-
-```bash
+# ou, instalar apenas os essenciais:
 pip install selenium webdriver-manager
 ```
 
-## ⚙️ Configuração
+## Configuração
 
-Coloque `config.json` e `dados.json` na raiz do projeto.
-
-- Exemplo de `config.json`:
+Crie `config.json` na raiz com as configurações mínimas e credenciais:
 
 ```json
 {
-  "url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf",
-  "timeout_aguarde": 40
+  "url_sistema": "https://seu-ntiss",
+  "timeout_aguarde": 40,
+  "usuario": "SEU_USUARIO",
+  "senha": "SUA_SENHA"
 }
 ```
 
-- Exemplo de `dados.json` (V27):
+Crie `dados.json` com os arrays a processar (exemplo):
 
 ```json
 {
-  "secretarias_para_pesquisar": [
-    "77.mrios",
-    "77.joana",
-    "77.toliveira"
-  ],
-  "logins_para_vincular": [
-    "77.hu",
-    "77.suporte"
-  ],
-  "medicos_para_cadastrar": [
-    "JOAO DA SILVA",
-    "MARIA SOUZA"
-  ]
+  "secretarias_para_pesquisar": ["77.mrios", "77.joana"],
+  "logins_para_vincular": ["77.usuario1", "77.usuario2"],
+  "medicos_para_cadastrar": ["JOAO DA SILVA", "MARIA SOUZA"]
 }
 ```
 
-Descrição dos campos:
+Observação: JSON não aceita comentários; use campos como `_comment` para anotações internas.
 
-- `secretarias_para_pesquisar`: logins que o robô buscará na tela principal para navegar entre cadastros.
-- `logins_para_vincular`: usuários que serão vinculados dentro do cadastro (Modo Vínculo).
-- `medicos_para_cadastrar`: nomes que receberão serviços (Modo Cadastro de Serviços).
+## Execução
 
-## ⚠️ Cuidados durante a execução
-
-- Não minimize a janela do navegador — isso pode pausar a renderização e causar timeouts.
-- Não bloqueie a sessão do Windows (Win+L) durante a execução.
-- Evite usar o mouse/teclado quando o script estiver digitando ou clicando elementos críticos.
-
-## 🔎 Como executar
+Executar o script principal:
 
 ```bash
 python autotiss.py
 ```
 
-Pressione `P` no terminal para pausar o robô.
+Comportamento esperado:
+- O robô realiza login automático usando `config.json`.
+- Navega para as telas necessárias e executa os módulos de vínculo ou cadastro.
+- Pode pedir interação (pressionar Enter) para iniciar ciclos novos após edição de `dados.json`.
+
+## Estrutura do projeto
+
+- `autotiss.py` — script principal
+- `config.json` — configurações do sistema e credenciais
+- `dados.json` — dados de entrada (logins, médicos, secretarias)
+- `requirements.txt` — dependências (opcional)
+
+## Segurança e .gitignore
+
+Por conter credenciais, inclua regras no seu `.gitignore`:
+
+```
+config.json
+dados.json
+*.log
+__pycache__/
+```
+
+Nunca comite `config.json` com credenciais reais.
+
+## Solução de problemas
+
+- `JSONDecodeError`: valide `config.json` e `dados.json` com um validador JSON.
+- Erros de WebDriver: atualize o driver ou use `webdriver-manager` para versão compatível com o navegador.
+- Janela minimizada no Windows: não minimize a janela do navegador; o Windows pode suspender renderização.
+
+## Contribuição
+
+Contribuições são bem-vindas: abra uma issue descrevendo o problema ou envie um pull request com testes mínimos e instruções.
+
+---
+
+Se desejar, adiciono exemplos de execução (logs), badges, ou scripts de CI. Quer que eu abra o preview do `README.md` agora? 
