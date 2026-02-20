@@ -25,6 +25,9 @@ from selenium.common.exceptions import StaleElementReferenceException
 ARQUIVO_CONFIG = "config.json"
 ARQUIVO_DADOS = "dados.json"
 
+# --- VARIÁVEIS DE CONTROLE ---
+solicitar_finalizacao = False
+
 # --- CONFIGURAÇÃO ---
 def carregar_json(caminho):
     if not os.path.exists(caminho): return None
@@ -48,12 +51,28 @@ def log(mensagem):
     print(f"[{hora}] {mensagem}")
 
 def checar_pausa():
+    """Verifica se há tecla pressionada para pausar (P) ou finalizar (F)"""
+    global solicitar_finalizacao
     if msvcrt.kbhit():
         tecla = msvcrt.getch()
         if tecla.lower() == b'p':
-            print("\n>>> PAUSA SOLICITADA! ENTER para continuar... <<<")
-            input()
-            log("Retomando...")
+            print("\n" + "="*60)
+            print(">>> ⏸️  PAUSA SOLICITADA! <<<")
+            print("    Pressione ENTER para continuar...")
+            print("    Ou pressione F + ENTER para finalizar")
+            print("="*60)
+            resposta = input().strip().lower()
+            if resposta == 'f':
+                solicitar_finalizacao = True
+                log("🛑 Finalização solicitada pelo usuário!")
+            else:
+                log("▶️  Retomando execução...")
+        elif tecla.lower() == b'f':
+            print("\n" + "="*60)
+            print(">>> 🛑 FINALIZAÇÃO SOLICITADA! <<<")
+            print("="*60)
+            solicitar_finalizacao = True
+            log("Encerrando processo...")
 
 def esperar_aguarde_sumir(driver):
     time.sleep(0.2)
@@ -158,6 +177,7 @@ def verificar_status_medico(driver, botao_lapis):
     except: return True 
 
 def executar_logica_vincular_logins(driver, lista_logins):
+    global solicitar_finalizacao
     try:
         botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
         if not botoes: return
@@ -165,6 +185,9 @@ def executar_logica_vincular_logins(driver, lista_logins):
         log(f"   [VINCULAR] Processando {total_proc} médicos...")
 
         for i in range(total_proc):
+            if solicitar_finalizacao:
+                log("🛑 Processo interrompido pelo usuário")
+                return
             log(f"   --- Médico {i+1} ---")
             checar_pausa()
             try:
@@ -238,10 +261,20 @@ def garantir_checkbox(driver, texto_label):
         except: continue
 
 def executar_logica_cadastrar_servicos(driver, medicos):
+    global solicitar_finalizacao
     log(f"   [CADASTRAR] Iniciando lista de {len(medicos)} médicos...")
     modal_aberto = False
     
     for index, nome_medico in enumerate(medicos):
+        if solicitar_finalizacao:
+            log("🛑 Processo interrompido pelo usuário")
+            if modal_aberto:
+                try:
+                    btn_cancelar = driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']")
+                    clicar_js(driver, btn_cancelar, "Cancelar Modal")
+                    esperar_aguarde_sumir(driver)
+                except: fechar_janelas_travadas(driver)
+            return
         log(f"   --- [{index+1}/{len(medicos)}] {nome_medico} ---")
         checar_pausa()
         try:
@@ -310,11 +343,17 @@ def executar_logica_cadastrar_servicos(driver, medicos):
 # ==============================================================================
 
 def executar_robo_completo(driver):
+    global solicitar_finalizacao
     while True:
-        print("\n--- MENU V29 (AUTO LOGIN) ---")
+        print("\n" + "="*60)
+        print("--- MENU V29 (AUTO LOGIN) ---")
         print(" 1 - Vincular Logins")
         print(" 2 - Cadastrar Serviços (Otimizado)")
         print(" 0 - Sair")
+        print("\n💡 Durante a execução:")
+        print("   • Pressione [P] para PAUSAR")
+        print("   • Pressione [F] para FINALIZAR")
+        print("="*60)
         op = input(">>> Escolha: ").strip()
         if op == '0': break
         
@@ -325,6 +364,10 @@ def executar_robo_completo(driver):
             continue
 
         for idx, sec in enumerate(secretarias):
+            if solicitar_finalizacao:
+                log("\n🛑 Execução finalizada pelo usuário!")
+                solicitar_finalizacao = False
+                break
             log(f"\n=== SECRETARIA [{idx+1}/{len(secretarias)}]: {sec} ===")
             if navegar_pesquisar_secretaria(driver, sec):
                 if op == '1':
@@ -332,8 +375,14 @@ def executar_robo_completo(driver):
                 elif op == '2':
                     executar_logica_cadastrar_servicos(driver, dados.get("medicos_para_cadastrar", []))
                 voltar_para_pesquisa(driver)
+                if solicitar_finalizacao:
+                    break
 
-        print("\nCICLO FINALIZADO! ENTER para menu...")
+        if not solicitar_finalizacao:
+            print("\n✅ CICLO FINALIZADO! ENTER para voltar ao menu...")
+        else:
+            print("\n🛑 Processo encerrado. ENTER para voltar ao menu...")
+            solicitar_finalizacao = False
         input()
 
 if __name__ == "__main__":
