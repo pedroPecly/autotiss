@@ -188,7 +188,7 @@ def executar_logica_vincular_logins(driver, lista_logins):
             if solicitar_finalizacao:
                 log("🛑 Processo interrompido pelo usuário")
                 return
-            log(f"   --- Médico {i+1} ---")
+            log(f"   --- Médico {i+1}/{total_proc} ---")
             checar_pausa()
             try:
                 botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
