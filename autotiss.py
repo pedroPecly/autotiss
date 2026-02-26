@@ -27,6 +27,7 @@ ARQUIVO_DADOS = "dados.json"
 
 # --- VARIÁVEIS DE CONTROLE ---
 solicitar_finalizacao = False
+medicos_cadastrados_sessao = {}  # {secretaria: [medico1, medico2, ...]}
 
 # --- CONFIGURAÇÃO ---
 def carregar_json(caminho):
@@ -176,8 +177,10 @@ def verificar_status_medico(driver, botao_lapis):
         return False
     except: return True 
 
-def executar_logica_vincular_logins(driver, lista_logins):
+def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
     global solicitar_finalizacao
+    if filtro_medicos is not None:
+        log(f"   [VINCULAR] Modo filtrado: {len(filtro_medicos)} médico(s) alvo.")
     try:
         botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
         if not botoes: return
@@ -194,7 +197,18 @@ def executar_logica_vincular_logins(driver, lista_logins):
                 botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
                 if i >= len(botoes): break
                 botao = botoes[i]
-                if not verificar_status_medico(driver, botao): 
+
+                # Filtra por nome se filtro_medicos foi fornecido
+                if filtro_medicos is not None:
+                    try:
+                        linha = botao.find_element(By.XPATH, "./ancestor::tr")
+                        texto_linha = linha.text.upper()
+                        if not any(m.upper() in texto_linha for m in filtro_medicos):
+                            log("   -> Pulando (não cadastrado nesta sessão).")
+                            continue
+                    except: pass
+
+                if not verificar_status_medico(driver, botao):
                     log("   -> Inativo.")
                     continue
                 
@@ -264,6 +278,7 @@ def executar_logica_cadastrar_servicos(driver, medicos):
     global solicitar_finalizacao
     log(f"   [CADASTRAR] Iniciando lista de {len(medicos)} médicos...")
     modal_aberto = False
+    cadastrados_agora = []
     
     for index, nome_medico in enumerate(medicos):
         if solicitar_finalizacao:
@@ -318,6 +333,7 @@ def executar_logica_cadastrar_servicos(driver, medicos):
                 clicar_js(driver, btn_salvar, "Salvar")
                 esperar_aguarde_sumir(driver)
                 log("      -> Sucesso (Cadastrado).")
+                cadastrados_agora.append(nome_medico)
                 modal_aberto = False
                 
             except Exception as e:
@@ -337,13 +353,14 @@ def executar_logica_cadastrar_servicos(driver, medicos):
             clicar_js(driver, btn_cancelar, "Cancelar Modal Final")
             esperar_aguarde_sumir(driver)
         except: fechar_janelas_travadas(driver)
+    return cadastrados_agora
 
 # ==============================================================================
 # MAIN
 # ==============================================================================
 
 def executar_robo_completo(driver):
-    global solicitar_finalizacao
+    global solicitar_finalizacao, medicos_cadastrados_sessao
     while True:
         print("\n" + "="*60)
         print("--- MENU V29 (AUTO LOGIN) ---")
@@ -359,7 +376,8 @@ def executar_robo_completo(driver):
         if op not in ('1', '2'):
             log("[AVISO] Opção inválida. Digite 1, 2 ou 0.")
             continue
-        
+
+        medicos_cadastrados_sessao = {}  # reseta a cada nova execução
         dados = carregar_json(ARQUIVO_DADOS)
         secretarias = dados.get("secretarias_para_pesquisar", [])
         if not secretarias:
@@ -376,7 +394,9 @@ def executar_robo_completo(driver):
                 if op == '1':
                     executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []))
                 elif op == '2':
-                    executar_logica_cadastrar_servicos(driver, dados.get("medicos_para_cadastrar", []))
+                    cadastrados = executar_logica_cadastrar_servicos(driver, dados.get("medicos_para_cadastrar", []))
+                    if cadastrados:
+                        medicos_cadastrados_sessao[sec] = cadastrados
                 voltar_para_pesquisa(driver)
                 if solicitar_finalizacao:
                     break
@@ -386,6 +406,31 @@ def executar_robo_completo(driver):
         else:
             print("\n🛑 Processo encerrado. ENTER para voltar ao menu...")
             solicitar_finalizacao = False
+
+        # Após modo 2, oferece vincular logins apenas nos médicos cadastrados
+        if op == '2' and medicos_cadastrados_sessao:
+            total_cadastrados = sum(len(v) for v in medicos_cadastrados_sessao.values())
+            print(f"\n🔗 {total_cadastrados} médico(s) cadastrado(s) em {len(medicos_cadastrados_sessao)} secretaria(s) nesta sessão.")
+            print("   Deseja executar Vincular Logins apenas neles? (S/N): ", end="")
+            resp = input().strip().lower()
+            if resp == 's':
+                solicitar_finalizacao = False
+                log(f"[VINCULAR PÓS-CADASTRO] {len(medicos_cadastrados_sessao)} secretaria(s) com novos cadastros.")
+                secs_com_cadastro = list(medicos_cadastrados_sessao.keys())
+                for idx, sec in enumerate(secs_com_cadastro):
+                    if solicitar_finalizacao:
+                        log("\n🛑 Execução finalizada pelo usuário!")
+                        solicitar_finalizacao = False
+                        break
+                    filtro = medicos_cadastrados_sessao[sec]
+                    log(f"\n=== SECRETARIA [{idx+1}/{len(secs_com_cadastro)}]: {sec} ({len(filtro)} médico(s)) ===")
+                    if navegar_pesquisar_secretaria(driver, sec):
+                        executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []), filtro_medicos=filtro)
+                        voltar_para_pesquisa(driver)
+                        if solicitar_finalizacao:
+                            break
+                print("\n✅ VINCULAR PÓS-CADASTRO FINALIZADO! ENTER para voltar ao menu...")
+
         input()
 
 if __name__ == "__main__":
