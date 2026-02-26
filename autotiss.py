@@ -356,6 +356,9 @@ def executar_robo_completo(driver):
         print("="*60)
         op = input(">>> Escolha: ").strip()
         if op == '0': break
+        if op not in ('1', '2'):
+            log("[AVISO] Opção inválida. Digite 1, 2 ou 0.")
+            continue
         
         dados = carregar_json(ARQUIVO_DADOS)
         secretarias = dados.get("secretarias_para_pesquisar", [])
