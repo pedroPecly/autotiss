@@ -124,6 +124,43 @@ def realizar_login_automatico(driver):
 
 # --- FUNÇÕES DE NAVEGAÇÃO ---
 
+def navegar_para_lista_funcionarios(driver):
+    """Navega automaticamente até a tela de Consulta de Funcionários.
+    Usa JS para clicar no link, sem depender do mouse físico (evita fechar o submenu acidentalmente).
+    """
+    log("🗂️  [NAVEGAÇÃO] Indo para a lista de Funcionários...")
+    try:
+        # Passo 1: Aguarda o link de 'Funcionário' existir no DOM (mesmo que oculto no submenu)
+        # JS click funciona em elementos ocultos — não precisa de hover nem mover o mouse
+        link_funcionario = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((
+                By.XPATH,
+                "//a[contains(@href,'/ntiss/cadastros/funcionario/lista.jsf')]"
+            ))
+        )
+        driver.execute_script("arguments[0].click();", link_funcionario)
+        log("   -> Clique em 'Funcionário' realizado via JS.")
+
+        # Passo 2: Aguarda a página carregar completamente
+        esperar_aguarde_sumir(driver)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//button[span[text()='Pesquisar']]"))
+        )
+
+        # Passo 3: Move o mouse para o centro do conteúdo principal (longe da área do menu)
+        # Evita que o submenu 'Cadastros' reabra por hover acidental após o carregamento
+        try:
+            corpo = driver.find_element(By.TAG_NAME, "body")
+            webdriver.ActionChains(driver).move_to_element_with_offset(corpo, 100, 400).perform()
+        except:
+            pass
+
+        log("✅ Tela de Consulta de Funcionários carregada!")
+        return True
+    except Exception as e:
+        log(f"❌ Erro ao navegar para Funcionários: {e}")
+        return False
+
 def navegar_pesquisar_secretaria(driver, login_secretaria):
     log(f"🔍 [NAVEGAÇÃO] Pesquisando: {login_secretaria}")
     esperar_aguarde_sumir(driver)
@@ -402,9 +439,9 @@ def executar_robo_completo(driver):
                     break
 
         if not solicitar_finalizacao:
-            print("\n✅ CICLO FINALIZADO! ENTER para voltar ao menu...")
+            print("\n✅ CICLO FINALIZADO! Voltando ao menu...")
         else:
-            print("\n🛑 Processo encerrado. ENTER para voltar ao menu...")
+            print("\n🛑 Processo encerrado. Voltando ao menu...")
             solicitar_finalizacao = False
 
         # Após modo 2, oferece vincular logins apenas nos médicos cadastrados
@@ -429,9 +466,7 @@ def executar_robo_completo(driver):
                         voltar_para_pesquisa(driver)
                         if solicitar_finalizacao:
                             break
-                print("\n✅ VINCULAR PÓS-CADASTRO FINALIZADO! ENTER para voltar ao menu...")
-
-        input()
+                print("\n✅ VINCULAR PÓS-CADASTRO FINALIZADO! Voltando ao menu...")
 
 if __name__ == "__main__":
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
@@ -444,11 +479,7 @@ if __name__ == "__main__":
     else:
         print(">>> [AVISO] Usuário/Senha não configurados no JSON. Faça login manual.")
 
-    print("\n" + "="*50)
-    print(" >>> NAVEGUE ATÉ A TELA DE 'CONSULTA DE FUNCIONÁRIOS' <<<")
-    print(" >>> QUANDO ESTIVER VENDO O CAMPO DE PESQUISA, DÊ ENTER <<<")
-    print("="*50)
-    input()
-    
+    navegar_para_lista_funcionarios(driver)
+
     executar_robo_completo(driver)
     driver.quit()
