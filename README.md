@@ -108,17 +108,3 @@ __pycache__/
 ```
 
 Nunca comite `config.json` com credenciais reais.
-
-## Solução de problemas
-
-- `JSONDecodeError`: valide `config.json` e `dados.json` com um validador JSON.
-- Erros de WebDriver: atualize o driver ou use `webdriver-manager` para versão compatível com o navegador.
-- Janela minimizada no Windows: não minimize a janela do navegador; o Windows pode suspender renderização.
-
-## Contribuição
-
-Contribuições são bem-vindas: abra uma issue descrevendo o problema ou envie um pull request com testes mínimos e instruções.
-
----
-
-Se desejar, adiciono exemplos de execução (logs), badges, ou scripts de CI. Quer que eu abra o preview do `README.md` agora? 
