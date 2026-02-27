@@ -37,8 +37,6 @@ def carregar_json(caminho):
     except: return None
 
 CONF = carregar_json(ARQUIVO_CONFIG)
-if not CONF:
-    CONF = {"url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf", "timeout_aguarde": 40}
 
 URL_SISTEMA = CONF.get("url_sistema")
 TIMEOUT_AGUARDE = CONF.get("timeout_aguarde", 40)
