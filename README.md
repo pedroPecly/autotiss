@@ -1,6 +1,6 @@
-# 🏥 Automação NTISS — Vínculo e Cadastro Massivo (JSON)
+﻿#  Automação NTISS  Vínculo e Cadastro Massivo (JSON)
 
-Descrição: automação RPA em Python (Selenium) para login automático, vínculo de logins e cadastro massivo de médicos no sistema NTISS.
+Automação RPA em Python + Selenium para login automático, vínculo de logins e cadastro massivo de serviços de médicos no sistema NTISS, com painel de controle flutuante em tempo real.
 
 ---
 
@@ -8,103 +8,187 @@ Descrição: automação RPA em Python (Selenium) para login automático, víncu
 
 - [Visão geral](#visão-geral)
 - [Funcionalidades](#funcionalidades)
+- [Painel flutuante](#painel-flutuante)
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
 - [Configuração](#configuração)
 - [Execução](#execução)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Segurança e .gitignore](#segurança-e-gitignore)
-- [Solução de problemas](#solução-de-problemas)
-- [Contribuição](#contribuição)
 
 ---
 
 ## Visão geral
 
-Este projeto (versões V24/V29) automatiza tarefas repetitivas no NTISS: autenticação, navegação entre telas, vínculo de logins a médicos e cadastro massivo. A configuração e os dados ficam separados em arquivos JSON (`config.json`, `dados.json`).
+O script (`autotiss.py`) automatiza tarefas repetitivas no NTISS: autenticação, navegação entre telas, vínculo de logins a médicos e cadastro massivo de serviços. A configuração e os dados de entrada ficam separados em arquivos JSON (`config.json`, `dados.json`).
+
+Durante a execução, um painel flutuante com tema escuro é exibido sobre o navegador, mostrando status em tempo real e permitindo pausar, retomar ou parar o processo com um clique.
+
+---
 
 ## Funcionalidades
 
-- Login automático a partir de credenciais em `config.json`.
-- Modo Vínculo: processa `logins_para_vincular` e evita regravações desnecessárias.
-- Modo Cadastro: processa `medicos_para_cadastrar`, com busca/seleção precisa em componentes PrimeFaces e espera por carregamento AJAX.
-- Navegação resiliente: detecta falhas de pesquisa, pula itens e continua o ciclo.
-- Ações via JavaScript para contornar overlays e elementos inacessíveis.
-- Hot-reload básico: editar `dados.json` e iniciar novo ciclo (quando o script suportar).
-- Pausa manual segura (ex.: tecla para pausar no terminal).
+###  Login automático
+- Preenche usuário e senha a partir do `config.json` e clica em Entrar automaticamente.
+- Fallback para login manual caso as credenciais não estejam configuradas.
+
+###  Modo 1  Vincular Logins
+- Itera sobre todos os médicos ativos de cada secretaria listada.
+- Para cada médico, **verifica e ativa automaticamente** o checkbox *"Visualiza transações de outros logins?"* antes de qualquer vínculo, garantindo que o acesso à pesquisa esteja liberado.
+- Vincula os logins definidos em `logins_para_vincular`.
+- Salva apenas se houve alguma alteração; cancela caso contrário (evita gravações desnecessárias).
+- Suporta modo filtrado: após o Modo 2, pode rodar apenas nos médicos recém-cadastrados na sessão.
+
+###  Modo 2  Cadastrar Serviços
+- Processa a lista `medicos_para_cadastrar` para cada secretaria.
+- Busca o médico no dropdown do NTISS de forma **case-insensitive** (funciona independentemente de maiúsculas/minúsculas no JSON).
+- Marca os checkboxes obrigatórios com **retry automático** (até 3 tentativas com scroll e verificação pós-clique):
+  - *Visualiza transações*
+  - *Cancela/Exclui*
+  - *Todas as transações* (header da tabela)
+- Detecta médicos já cadastrados e os pula sem interromper o ciclo.
+- Ao final, oferece **inline no painel flutuante** a opção de executar o Modo 1 apenas nos médicos que foram cadastrados na sessão.
+
+---
+
+## Painel flutuante
+
+Janela Tkinter com tema escuro, sempre visível sobre o navegador, arrastável pela barra de título.
+
+```
+
+   NTISS AUTOMATION                           
+
+ MODO:        Cadastrar Serviços                 
+ SECRETARIA:  77.hu_smoraes                      
+ MÉDICO:      CRISTINA FACIOLI ROCHA             
+ PROGRESSO:   12 / 76                            
+
+ LOG                                             
+ 10:42  [NAVEGAÇÃO] Pesquisando: 77.hu_      
+ 10:43  Cadastrado com sucesso.                
+ ...                                             
+
+  Vincular   Cadastrar   Pausar   Parar
+
+```
+
+**Controles:**
+| Botão | Função |
+|---|---|
+|  Vincular | Inicia o Modo 1 |
+|  Cadastrar | Inicia o Modo 2 |
+|  Pausar /  Retomar | Suspende e retoma o bot entre passos |
+|  Parar | Encerra o ciclo atual com segurança |
+
+**Log colorido:**
+| Cor | Significado |
+|---|---|
+| Verde | Sucesso, item cadastrado/vinculado |
+| Vermelho | Erro crítico |
+| Amarelo | Aviso, retry, já cadastrado |
+| Ciano | Navegação, informação geral |
+| Azul | Cabeçalho de secretaria |
+| Cinza | Itens pulados / inativos |
+
+---
 
 ## Requisitos
 
 - Python 3.8+
-- Navegador compatível (Chrome/Edge/Firefox) e driver correspondente
-- Dependências Python (recomendado via `requirements.txt`)
+- Google Chrome instalado
+- Dependências Python listadas em `requirements.txt`
+
+---
 
 ## Instalação
 
 1. Clone o repositório.
-2. Crie e ative um ambiente virtual (opcional, recomendado).
-3. Instale dependências:
+2. Crie e ative um ambiente virtual (recomendado):
+
+```bash
+python -m venv venv
+venv\Scripts\activate   # Windows
+```
+
+3. Instale as dependências:
 
 ```bash
 pip install -r requirements.txt
-# ou, instalar apenas os essenciais:
-pip install selenium webdriver-manager
 ```
+
+---
 
 ## Configuração
 
-Crie `config.json` na raiz com as configurações mínimas e credenciais:
+### `config.json`
 
 ```json
 {
-  "url_sistema": "https://seu-ntiss",
+  "url_sistema": "https://ntiss.neki-it.com.br/ntiss/login.jsf",
   "timeout_aguarde": 40,
   "usuario": "SEU_USUARIO",
   "senha": "SUA_SENHA"
 }
 ```
 
-Crie `dados.json` com os arrays a processar (exemplo):
+### `dados.json`
 
 ```json
 {
-  "secretarias_para_pesquisar": ["77.mrios", "77.joana"],
-  "logins_para_vincular": ["77.usuario1", "77.usuario2"],
-  "medicos_para_cadastrar": ["JOAO DA SILVA", "MARIA SOUZA"]
+  "secretarias_para_pesquisar": [
+    "77.hu_login1",
+    "77.hu_login2"
+  ],
+  "logins_para_vincular": [
+    "77.hu"
+  ],
+  "medicos_para_cadastrar": [
+    "NOME DO MEDICO UM",
+    "NOME DO MEDICO DOIS"
+  ]
 }
 ```
 
-Observação: JSON não aceita comentários; use campos como `_comment` para anotações internas.
+> **Dica:** os nomes em `medicos_para_cadastrar` podem estar em qualquer capitalização  o robô converte para maiúsculo automaticamente na busca.
+
+---
 
 ## Execução
-
-Executar o script principal:
 
 ```bash
 python autotiss.py
 ```
 
-Comportamento esperado:
-- O robô realiza login automático usando `config.json`.
-- Navega para as telas necessárias e executa os módulos de vínculo ou cadastro.
-- Pode pedir interação (pressionar Enter) para iniciar ciclos novos após edição de `dados.json`.
+Fluxo ao iniciar:
+1. O Chrome abre e o robô faz login automático.
+2. Navega para a lista de Funcionários.
+3. O painel flutuante aparece no canto inferior direito da tela.
+4. Clique em **Vincular** ou **Cadastrar** para iniciar.
+
+---
 
 ## Estrutura do projeto
 
-- `autotiss.py` — script principal
-- `config.json` — configurações do sistema e credenciais
-- `dados.json` — dados de entrada (logins, médicos, secretarias)
-- `requirements.txt` — dependências (opcional)
+```
+autotiss.py         script principal (bot + UI flutuante)
+config.json         credenciais e configurações do sistema
+dados.json          dados de entrada (secretarias, logins, médicos)
+requirements.txt    dependências Python
+```
+
+---
 
 ## Segurança e .gitignore
 
-Por conter credenciais, inclua regras no seu `.gitignore`:
+`config.json` contém credenciais reais  **nunca commite este arquivo**. Adicione ao `.gitignore`:
 
 ```
 config.json
 dados.json
 *.log
 __pycache__/
+venv/
+build/
+*.spec
 ```
-
-Nunca comite `config.json` com credenciais reais.
