@@ -40,6 +40,7 @@ _pause_event     = threading.Event()
 _pause_event.set()          # inicia no estado "rodando"
 _dialog_result   = None
 _dialog_event    = threading.Event()
+_skip_event      = threading.Event()  # sinaliza "pular para o próximo" durante pausa
 ui               = None     # instancia da FloatingUI (set no __main__)
 
 # --- CONFIGURAÇÃO ---
@@ -116,6 +117,9 @@ class FloatingUI:
     # ------------------------------------------------------------------ build
     def _build(self):
         C = self.C
+        self._minimizado = False
+        self._altura_normal = 540
+
         # ---- barra de titulo arastável
         bar = tk.Frame(self.root, bg=C["bar"], height=34)
         bar.pack(fill="x")
@@ -126,14 +130,23 @@ class FloatingUI:
                   font=("Segoe UI", 11, "bold"), cursor="hand2",
                   activebackground=C["bar"], activeforeground=C["vermelho"],
                   command=self.root.destroy).pack(side="right", padx=8)
+        self.btn_min = tk.Button(bar, text="─", fg=C["dim"], bg=C["bar"], bd=0,
+                  font=("Segoe UI", 11, "bold"), cursor="hand2",
+                  activebackground=C["bar"], activeforeground=C["texto"],
+                  command=self._toggle_minimizar)
+        self.btn_min.pack(side="right", padx=2)
         bar.bind("<ButtonPress-1>",  self._drag_start)
         bar.bind("<B1-Motion>",      self._drag_move)
         for w in bar.winfo_children():
             w.bind("<ButtonPress-1>",  self._drag_start)
             w.bind("<B1-Motion>",      self._drag_move)
 
+        # ---- corpo (ocultado no minimizar)
+        self._corpo = tk.Frame(self.root, bg=C["bg"])
+        self._corpo.pack(fill="both", expand=True)
+
         # ---- card de status
-        card = tk.Frame(self.root, bg=C["card"], padx=10, pady=8)
+        card = tk.Frame(self._corpo, bg=C["card"], padx=10, pady=8)
         card.pack(fill="x", padx=8, pady=(6, 0))
         self.lbl_modo = self._row(card, "MODO")
         self.lbl_sec  = self._row(card, "SECRETARIA")
@@ -141,16 +154,17 @@ class FloatingUI:
         self.lbl_prog = self._row(card, "PROGRESSO")
 
         # ---- botões (empacotado ANTES do log para reservar espaço no bottom)
-        bf = tk.Frame(self.root, bg=C["bg"], height=40)
-        bf.pack(side="bottom", fill="x", padx=8, pady=8)
-        bf.pack_propagate(False)
-        self.btn_v = self._btn(bf, "🔗 Vincular",  "#1e66f5", lambda: self._escolher(1))
-        self.btn_c = self._btn(bf, "➕ Cadastrar", "#40a02b", lambda: self._escolher(2))
-        self.btn_p = self._btn(bf, "⏸ Pausar",    "#df8e1d", self._toggle_pausa, state="disabled")
-        self.btn_s = self._btn(bf, "🛑 Parar",     "#d20f39", self._parar,       state="disabled")
+        self.bf = tk.Frame(self._corpo, bg=C["bg"])
+        self.bf.pack(side="bottom", fill="x", padx=8, pady=8)
+        self.btn_v = self._btn(self.bf, "🔗 Vincular",  "#1e66f5", lambda: self._escolher(1))
+        self.btn_c = self._btn(self.bf, "➕ Cadastrar", "#40a02b", lambda: self._escolher(2))
+        self.btn_p = self._btn(self.bf, "⏸ Pausar",    "#df8e1d", self._toggle_pausa, state="disabled")
+        self.btn_n = self._btn(self.bf, "⏭ Próximo usuário", "#585b70", self._skip, state="disabled")
+        self.btn_n.pack_forget()  # visível apenas quando pausado
+        self.btn_s = self._btn(self.bf, "🛑 Parar",     "#d20f39", self._parar,       state="disabled")
 
         # ---- area de log (expand=True agora só ocupa o espaço restante)
-        lf = tk.Frame(self.root, bg=C["bg"])
+        lf = tk.Frame(self._corpo, bg=C["bg"])
         lf.pack(fill="both", expand=True, padx=8, pady=(6, 0))
         tk.Label(lf, text="LOG", fg=C["dim"], bg=C["bg"],
                  font=("Segoe UI", 7, "bold")).pack(anchor="w")
@@ -197,6 +211,25 @@ class FloatingUI:
     def _drag_move(self, e):
         self.root.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
 
+    def _toggle_minimizar(self):
+        if self._minimizado:
+            # restaura
+            self._corpo.pack(fill="both", expand=True)
+            geo = self.root.geometry()
+            x, y = geo.split("+")[1], geo.split("+")[2]
+            self.root.geometry(f"370x{self._altura_normal}+{x}+{y}")
+            self.btn_min.config(text="─")
+            self._minimizado = False
+        else:
+            # minimiza: esconde tudo abaixo da barra
+            self._altura_normal = self.root.winfo_height()
+            self._corpo.pack_forget()
+            geo = self.root.geometry()
+            x, y = geo.split("+")[1], geo.split("+")[2]
+            self.root.geometry(f"370x34+{x}+{y}")
+            self.btn_min.config(text="□")
+            self._minimizado = True
+
     # ---------------------------------------------------------------- acoes
     def _escolher(self, op):
         global _menu_escolha
@@ -211,29 +244,62 @@ class FloatingUI:
 
     def _toggle_pausa(self):
         if _pause_event.is_set():
+            # ---- pausar: mostra 3 botões grandes (Retomar / Próximo usuário / Parar)
             _pause_event.clear()
+            for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
+                b.pack_forget()
             self.btn_p.config(text="▶ Retomar", bg="#40a02b")
-            log("⏸ Pausado — clique em Retomar para continuar.")
+            self.btn_n.config(state="normal")
+            for b in (self.btn_p, self.btn_n, self.btn_s):
+                b.pack(side="left", expand=True, fill="x", padx=2)
+            log("⏸ Pausado — Retomar ou ⏭ Próximo usuário (pula secretaria atual).")
         else:
+            # ---- retomar: volta aos 4 botões normais
             _pause_event.set()
+            for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
+                b.pack_forget()
             self.btn_p.config(text="⏸ Pausar", bg="#df8e1d")
+            for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_s):
+                b.pack(side="left", expand=True, fill="x", padx=2)
             log("▶️  Retomando execução...")
+
+    def _skip(self):
+        """Pula a secretaria atual e retoma na próxima."""
+        _skip_event.set()
+        _pause_event.set()   # desbloqueia o wait em checar_pausa
+        for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
+            b.pack_forget()
+        self.btn_p.config(text="⏸ Pausar", bg="#df8e1d")
+        for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_s):
+            b.pack(side="left", expand=True, fill="x", padx=2)
+        log("⏭ Pulando para a próxima secretaria...")
 
     def _parar(self):
         global solicitar_finalizacao
         solicitar_finalizacao = True
-        _pause_event.set()   # desbloqueia se estiver pausado
-        _menu_event.set()    # desbloqueia se estiver no menu
+        _skip_event.clear()
+        _pause_event.set()
+        _menu_event.set()
+        # restaura layout normal de botões
+        for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
+            b.pack_forget()
+        self.btn_p.config(text="⏸ Pausar", bg="#df8e1d")
+        for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_s):
+            b.pack(side="left", expand=True, fill="x", padx=2)
         log("🛑 Parar solicitado pelo usuário.")
 
     # --------------------------------------------------------------- publicos
     def habilitar_menu(self):
         """Chama do thread do bot para re-habilitar os botões de menu."""
         def _do():
+            for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
+                b.pack_forget()
             self.btn_v.config(state="normal")
             self.btn_c.config(state="normal")
             self.btn_p.config(state="disabled", text="⏸ Pausar", bg="#df8e1d")
             self.btn_s.config(state="disabled")
+            for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_s):
+                b.pack(side="left", expand=True, fill="x", padx=2)
             self.status(modo="—", secretaria="—", medico="—", progresso="—")
         self.root.after(0, _do)
 
@@ -329,9 +395,13 @@ class FloatingUI:
 
 
 def checar_pausa():
-    """Bloqueia execução enquanto o botão Pausar estiver ativo."""
+    """Bloqueia enquanto pausado. Retorna True se o usuário clicou em Próximo."""
     if not _pause_event.is_set():
-        _pause_event.wait()  # aguarda Retomar ser clicado
+        _pause_event.wait()  # aguarda Retomar ou Próximo
+    if _skip_event.is_set():
+        _skip_event.clear()
+        return True   # sinaliza: pular este item
+    return False
 
 
 def esperar_aguarde_sumir(driver):
@@ -489,20 +559,31 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
             if solicitar_finalizacao:
                 log("🛑 Processo interrompido pelo usuário")
                 return
-            log(f"   --- Médico {i+1}/{total_proc} ---")
-            if ui: ui.status(progresso=f"{i+1} / {total_proc}")
-            checar_pausa()
+            if checar_pausa():
+                log("   ⏭ Secretaria pulada pelo usuário.")
+                return  # sai da função → main loop passa para a próxima secretaria
             try:
                 botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
                 if i >= len(botoes): break
                 botao = botoes[i]
 
+                # Extrai nome do médico da linha para log/status
+                nome_medico = f"Médico {i+1}"
+                try:
+                    linha_tr = botao.find_element(By.XPATH, "./ancestor::tr")
+                    celulas = linha_tr.find_elements(By.TAG_NAME, "td")
+                    if celulas:
+                        nome_medico = celulas[0].text.strip() or nome_medico
+                except: pass
+
+                log(f"   --- [{i+1}/{total_proc}] {nome_medico} ---")
+                if ui: ui.status(medico=nome_medico, progresso=f"{i+1} / {total_proc}")
+
                 # Filtra por nome se filtro_medicos foi fornecido
                 if filtro_medicos is not None:
                     try:
-                        linha = botao.find_element(By.XPATH, "./ancestor::tr")
-                        texto_linha = linha.text.upper()
-                        if not any(m.upper() in texto_linha for m in filtro_medicos):
+                        linha_txt = botao.find_element(By.XPATH, "./ancestor::tr").text.upper()
+                        if not any(m.upper() in linha_txt for m in filtro_medicos):
                             log("   -> Pulando (não cadastrado nesta sessão).")
                             continue
                     except: pass
@@ -525,9 +606,11 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
                         "//tr[.//label[contains(text(), 'Visualiza transa') and contains(text(), 'outros')]]//div[contains(@class, 'ui-chkbox-box')]",
                         "//label[contains(text(), 'Visualiza transa') and contains(text(), 'outros')]/..//div[contains(@class, 'ui-chkbox-box')]",
                     ]
+                    chk_encontrado = False
                     for xp in xpaths_viz:
                         try:
                             chk_viz = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.XPATH, xp)))
+                            chk_encontrado = True
                             if "ui-state-active" not in (chk_viz.get_attribute("class") or ""):
                                 driver.execute_script("arguments[0].scrollIntoView({block:'center'});", chk_viz)
                                 time.sleep(0.2)
@@ -542,35 +625,68 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
                             break
                         except:
                             continue
+                    if not chk_encontrado:
+                        log("      [AVISO] Checkbox 'Visualiza transações' não encontrado neste médico.")
 
-                    # --- Vincula logins ---
-                    div = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[id$=':escolherLogins']")))
-                    try: div.find_element(By.CSS_SELECTOR, ".ui-selectcheckboxmenu-trigger").click()
-                    except: driver.execute_script("arguments[0].click();", div)
-                    time.sleep(1.0)
-
-                    campo = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-filter-container input")
-                    for login in lista_logins:
-                        campo.clear()
-                        campo.send_keys(login)
+                    # --- Vincula logins / marca todos se lista estiver vazia ---
+                    try:
+                        div = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[id$=':escolherLogins']")))
+                        try: div.find_element(By.CSS_SELECTOR, ".ui-selectcheckboxmenu-trigger").click()
+                        except: driver.execute_script("arguments[0].click();", div)
                         time.sleep(1.0)
-                        try:
-                            chk = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-header .ui-chkbox-box")
-                            if "ui-state-active" not in chk.get_attribute("class"):
-                                chk.click()
-                                houve_alt = True
-                                log(f"      + Vinculado: {login}")
-                        except: pass
-                    
-                    try: driver.find_element(By.CSS_SELECTOR, "a.ui-selectcheckboxmenu-close").click()
-                    except: pass
-                    time.sleep(0.5)
 
-                    if houve_alt: clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Salvar']"), "Salvar")
-                    else: clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']"), "Cancelar")
+                        if lista_logins:
+                            # Pesquisa cada login e marca individualmente
+                            campo = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-filter-container input")
+                            for login in lista_logins:
+                                campo.clear()
+                                campo.send_keys(login)
+                                time.sleep(1.0)
+                                try:
+                                    chk = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-header .ui-chkbox-box")
+                                    if "ui-state-active" not in chk.get_attribute("class"):
+                                        chk.click()
+                                        houve_alt = True
+                                        log(f"      + Vinculado: {login}")
+                                except: pass
+                        else:
+                            # Sem logins configurados: marca o select-all (header) se não estiver marcado
+                            try:
+                                chk_all = driver.find_element(By.CSS_SELECTOR, "div.ui-selectcheckboxmenu-header .ui-chkbox-box")
+                                if "ui-state-active" not in (chk_all.get_attribute("class") or ""):
+                                    chk_all.click()
+                                    houve_alt = True
+                            except Exception as e:
+                                log(f"      [AVISO] Não encontrou checkbox select-all: {e}")
+
+                        try: driver.find_element(By.CSS_SELECTOR, "a.ui-selectcheckboxmenu-close").click()
+                        except: pass
+                        time.sleep(0.5)
+                    except Exception as e:
+                        log(f"      [AVISO] Dropdown escolherLogins não encontrado: {e}")
+
+                    # --- Salva se houve alteração, cancela caso contrário ---
+                    if houve_alt:
+                        log("      💾 Salvando alterações...")
+                        try:
+                            clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Salvar']"), "Salvar")
+                        except Exception as e:
+                            log(f"      [ERRO] Botão Salvar não encontrado: {e}")
+                            fechar_janelas_travadas(driver)
+                    else:
+                        log("      ↩ Sem alterações, cancelando...")
+                        try:
+                            clicar_js(driver, driver.find_element(By.XPATH, "//form[@id='formServico']//span[text()='Cancelar']"), "Cancelar")
+                        except Exception as e:
+                            log(f"      [AVISO] Botão Cancelar não encontrado, usando ESC: {e}")
+                            fechar_janelas_travadas(driver)
                     esperar_aguarde_sumir(driver)
-                except: fechar_janelas_travadas(driver)
-            except: fechar_janelas_travadas(driver)
+                except Exception as e:
+                    log(f"      [ERRO INTERNO] {e}")
+                    fechar_janelas_travadas(driver)
+            except Exception as e:
+                log(f"   [ERRO] Médico {i+1}: {e}")
+                fechar_janelas_travadas(driver)
     except: pass
 
 # ==============================================================================

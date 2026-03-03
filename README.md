@@ -34,8 +34,11 @@ Durante a execução, um painel flutuante com tema escuro é exibido sobre o nav
 
 ###  Modo 1  Vincular Logins
 - Itera sobre todos os médicos ativos de cada secretaria listada.
-- Para cada médico, **verifica e ativa automaticamente** o checkbox *"Visualiza transações de outros logins?"* antes de qualquer vínculo, garantindo que o acesso à pesquisa esteja liberado.
-- Vincula os logins definidos em `logins_para_vincular`.
+- Exibe o nome do médico em tempo real no campo **MÉDICO** do painel flutuante.
+- Para cada médico, **verifica e ativa automaticamente** o checkbox *"Visualiza transações de outros logins?"*, garantindo que o acesso à pesquisa esteja liberado.
+- Abre o campo *"Escolher Logins"* e executa o vínculo conforme o conteúdo de `logins_para_vincular`:
+  - **Com logins configurados:** pesquisa cada login individualmente e marca seu checkbox.
+  - **Com lista vazia:** marca o **select-all** do dropdown (vincula todos os logins disponíveis) sem precisar de nenhuma configuração extra.
 - Salva apenas se houve alguma alteração; cancela caso contrário (evita gravações desnecessárias).
 - Suporta modo filtrado: após o Modo 2, pode rodar apenas nos médicos recém-cadastrados na sessão.
 
@@ -76,10 +79,11 @@ Janela Tkinter com tema escuro, sempre visível sobre o navegador, arrastável p
 **Controles:**
 | Botão | Função |
 |---|---|
-|  Vincular | Inicia o Modo 1 |
-|  Cadastrar | Inicia o Modo 2 |
-|  Pausar /  Retomar | Suspende e retoma o bot entre passos |
-|  Parar | Encerra o ciclo atual com segurança |
+| Vincular | Inicia o Modo 1 |
+| Cadastrar | Inicia o Modo 2 |
+| Pausar / Retomar | Suspende e retoma o bot entre passos |
+| Próximo usuário | (visível ao pausar) Pula a secretaria atual e avança para a próxima |
+| Parar | Encerra o ciclo atual com segurança |
 
 **Log colorido:**
 | Cor | Significado |
@@ -150,7 +154,9 @@ pip install -r requirements.txt
 }
 ```
 
-> **Dica:** os nomes em `medicos_para_cadastrar` podem estar em qualquer capitalização  o robô converte para maiúsculo automaticamente na busca.
+> **Dica:** os nomes em `medicos_para_cadastrar` podem estar em qualquer capitalização — o robô converte para maiúsculo automaticamente na busca.
+
+> **Dica:** `logins_para_vincular` pode ser uma lista vazia `[]`. Nesse caso o Modo 1 abrirá o dropdown de logins de cada médico e marcará **todos** os logins disponíveis automaticamente (select-all).
 
 ---
 
