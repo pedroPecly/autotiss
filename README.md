@@ -1,4 +1,4 @@
-﻿#  Automação NTISS  Vínculo e Cadastro Massivo (JSON)
+﻿#  Automação NTISS — Vínculo e Cadastro Massivo (JSON)
 
 Automação RPA em Python + Selenium para login automático, vínculo de logins e cadastro massivo de serviços de médicos no sistema NTISS, com painel de controle flutuante em tempo real.
 
@@ -32,22 +32,25 @@ Durante a execução, um painel flutuante com tema escuro é exibido sobre o nav
 - Preenche usuário e senha a partir do `config.json` e clica em Entrar automaticamente.
 - Fallback para login manual caso as credenciais não estejam configuradas.
 
-###  Modo 1  Vincular Logins
+###  Modo 1 — Vincular Logins
 - Itera sobre todos os médicos ativos de cada secretaria listada.
 - Exibe o nome do médico em tempo real no campo **MÉDICO** do painel flutuante.
-- Para cada médico, **verifica e ativa automaticamente** o checkbox *"Visualiza transações de outros logins?"*, garantindo que o acesso à pesquisa esteja liberado.
+- Para cada médico, **verifica e ativa automaticamente**:
+  - O checkbox *"Visualiza transações de outros logins?"*
+  - O checkbox *"Cancela/Exclui transações de outros logins?"*
 - Abre o campo *"Escolher Logins"* e executa o vínculo conforme o conteúdo de `logins_para_vincular`:
   - **Com logins configurados:** pesquisa cada login individualmente e marca seu checkbox.
   - **Com lista vazia:** marca o **select-all** do dropdown (vincula todos os logins disponíveis) sem precisar de nenhuma configuração extra.
+- Suporta filtro por médico via `medicos_para_vincular` no `dados.json` — quando informado, processa apenas os médicos da lista.
+- **Auto-cascade:** médicos do filtro não encontrados na secretaria são automaticamente cadastrados (Modo 2) e depois vinculados (Modo 1) sem intervenção manual.
 - Salva apenas se houve alguma alteração; cancela caso contrário (evita gravações desnecessárias).
-- Suporta modo filtrado: após o Modo 2, pode rodar apenas nos médicos recém-cadastrados na sessão.
 
-###  Modo 2  Cadastrar Serviços
+###  Modo 2 — Cadastrar Serviços
 - Processa a lista `medicos_para_cadastrar` para cada secretaria.
-- Busca o médico no dropdown do NTISS de forma **case-insensitive** (funciona independentemente de maiúsculas/minúsculas no JSON).
+- Busca o médico no dropdown do NTISS de forma **case-insensitive**.
 - Marca os checkboxes obrigatórios com **retry automático** (até 3 tentativas com scroll e verificação pós-clique):
   - *Visualiza transações*
-  - *Cancela/Exclui*
+  - *Cancela/Exclui transações de outros logins?* (via JavaScript — imune a problemas de encoding)
   - *Todas as transações* (header da tabela)
 - Detecta médicos já cadastrados e os pula sem interromper o ciclo.
 - Ao final, oferece **inline no painel flutuante** a opção de executar o Modo 1 apenas nos médicos que foram cadastrados na sessão.
@@ -72,18 +75,18 @@ Janela Tkinter com tema escuro, sempre visível sobre o navegador, arrastável p
  10:43  Cadastrado com sucesso.                
  ...                                             
 
-  Vincular   Cadastrar   Pausar   Parar
+  🔗 Vincular   ➕ Cadastrar   ⏸ Pausar   🛑 Parar
 
 ```
 
 **Controles:**
 | Botão | Função |
 |---|---|
-| Vincular | Inicia o Modo 1 |
-| Cadastrar | Inicia o Modo 2 |
-| Pausar / Retomar | Suspende e retoma o bot entre passos |
-| Próximo usuário | (visível ao pausar) Pula a secretaria atual e avança para a próxima |
-| Parar | Encerra o ciclo atual com segurança |
+| 🔗 Vincular | Inicia o Modo 1 |
+| ➕ Cadastrar | Inicia o Modo 2 |
+| ⏸ Pausar / ▶ Retomar | Suspende e retoma o bot entre passos |
+| ⏭ Próximo usuário | (visível ao pausar) Pula a secretaria atual e avança para a próxima |
+| 🛑 Parar | Encerra o ciclo atual com segurança |
 
 **Log colorido:**
 | Cor | Significado |
@@ -147,6 +150,7 @@ pip install -r requirements.txt
   "logins_para_vincular": [
     "77.hu"
   ],
+  "medicos_para_vincular": [],
   "medicos_para_cadastrar": [
     "NOME DO MEDICO UM",
     "NOME DO MEDICO DOIS"
@@ -154,9 +158,11 @@ pip install -r requirements.txt
 }
 ```
 
-> **Dica:** os nomes em `medicos_para_cadastrar` podem estar em qualquer capitalização — o robô converte para maiúsculo automaticamente na busca.
+> **`logins_para_vincular`** pode ser `[]`. Nesse caso o Modo 1 abrirá o dropdown de logins e marcará **todos** automaticamente (select-all).
 
-> **Dica:** `logins_para_vincular` pode ser uma lista vazia `[]`. Nesse caso o Modo 1 abrirá o dropdown de logins de cada médico e marcará **todos** os logins disponíveis automaticamente (select-all).
+> **`medicos_para_vincular`** pode ser `[]` (processa todos) ou conter nomes específicos para filtrar. Médicos do filtro não encontrados na secretaria são cadastrados e vinculados automaticamente (auto-cascade).
+
+> Os nomes em `medicos_para_cadastrar` e `medicos_para_vincular` podem estar em qualquer capitalização — o robô converte para maiúsculo automaticamente na busca.
 
 ---
 
@@ -170,7 +176,7 @@ Fluxo ao iniciar:
 1. O Chrome abre e o robô faz login automático.
 2. Navega para a lista de Funcionários.
 3. O painel flutuante aparece no canto inferior direito da tela.
-4. Clique em **Vincular** ou **Cadastrar** para iniciar.
+4. Clique em **🔗 Vincular** ou **➕ Cadastrar** para iniciar.
 
 ---
 
@@ -187,7 +193,7 @@ requirements.txt    dependências Python
 
 ## Segurança e .gitignore
 
-`config.json` contém credenciais reais  **nunca commite este arquivo**. Adicione ao `.gitignore`:
+`config.json` contém credenciais reais — **nunca commite este arquivo**. Adicione ao `.gitignore`:
 
 ```
 config.json

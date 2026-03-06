@@ -238,8 +238,8 @@ class FloatingUI:
         self.btn_c.config(state="disabled")
         self.btn_p.config(state="normal")
         self.btn_s.config(state="normal")
-        modo = "Vincular Logins" if op == 1 else "Cadastrar Serviços"
-        self.status(modo=modo)
+        modos = {1: "Vincular Logins", 2: "Cadastrar Serviços"}
+        self.status(modo=modos.get(op, str(op)))
         _menu_event.set()
 
     def _toggle_pausa(self):
@@ -254,7 +254,7 @@ class FloatingUI:
                 b.pack(side="left", expand=True, fill="x", padx=2)
             log("⏸ Pausado — Retomar ou ⏭ Próximo usuário (pula secretaria atual).")
         else:
-            # ---- retomar: volta aos 4 botões normais
+            # ---- retomar: volta aos botões normais
             _pause_event.set()
             for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
                 b.pack_forget()
@@ -266,7 +266,7 @@ class FloatingUI:
     def _skip(self):
         """Pula a secretaria atual e retoma na próxima."""
         _skip_event.set()
-        _pause_event.set()   # desbloqueia o wait em checar_pausa
+        _pause_event.set()
         for b in (self.btn_v, self.btn_c, self.btn_p, self.btn_n, self.btn_s):
             b.pack_forget()
         self.btn_p.config(text="⏸ Pausar", bg="#df8e1d")
@@ -547,21 +547,24 @@ def verificar_status_medico(driver, botao_lapis):
 def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
     global solicitar_finalizacao
     if filtro_medicos is not None:
-        log(f"   [VINCULAR] Modo filtrado: {len(filtro_medicos)} médico(s) alvo.")
+        log(f"   [VINCULAR] Filtro ativo: {len(filtro_medicos)} médico(s) alvo.")
     try:
         botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
-        if not botoes: return
+        if not botoes: return []
         total_proc = len(botoes) - 1 if len(botoes) > 1 else len(botoes)
         log(f"   [VINCULAR] Processando {total_proc} médicos...")
         if ui: ui.status(progresso=f"0 / {total_proc}")
 
+        # Rastreia quais médicos do filtro foram encontrados na tela
+        encontrados = set()
+
         for i in range(total_proc):
             if solicitar_finalizacao:
                 log("🛑 Processo interrompido pelo usuário")
-                return
+                return []
             if checar_pausa():
                 log("   ⏭ Secretaria pulada pelo usuário.")
-                return  # sai da função → main loop passa para a próxima secretaria
+                return []  # sai da função → main loop passa para a próxima secretaria
             try:
                 botoes = driver.find_elements(By.CSS_SELECTOR, "img[title='Alterar']")
                 if i >= len(botoes): break
@@ -583,9 +586,11 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
                 if filtro_medicos is not None:
                     try:
                         linha_txt = botao.find_element(By.XPATH, "./ancestor::tr").text.upper()
-                        if not any(m.upper() in linha_txt for m in filtro_medicos):
-                            log("   -> Pulando (não cadastrado nesta sessão).")
+                        match = next((m for m in filtro_medicos if m.upper() in linha_txt), None)
+                        if match is None:
+                            log("   -> Pulando (não está na lista para vincular).")
                             continue
+                        encontrados.add(match.upper())
                     except: pass
 
                 if not verificar_status_medico(driver, botao):
@@ -627,6 +632,42 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
                             continue
                     if not chk_encontrado:
                         log("      [AVISO] Checkbox 'Visualiza transações' não encontrado neste médico.")
+
+                    # --- Garante "Cancela/Exclui transações de outros logins?" ativado ---
+                    JS_FIND_CE = """
+                        var form = document.getElementById('formServico');
+                        if (!form) return [null, 'form nao encontrado', ''];
+                        var labels = form.querySelectorAll('label');
+                        for (var lbl of labels) {
+                            var txt = (lbl.textContent || '').trim();
+                            if (txt.indexOf('Cancela') >= 0 && txt.indexOf('outros') >= 0) {
+                                var parent = lbl.parentElement;
+                                if (parent) {
+                                    var box = parent.querySelector('.ui-chkbox-box');
+                                    if (box) return [box, txt, 'parent-div'];
+                                }
+                                if (parent && parent.previousElementSibling) {
+                                    var box = parent.previousElementSibling.querySelector('.ui-chkbox-box');
+                                    if (box) return [box, txt, 'prev-parent'];
+                                }
+                            }
+                        }
+                        return [null, 'nao encontrado', ''];
+                    """
+                    res_ce = driver.execute_script(JS_FIND_CE)
+                    chk_ce = res_ce[0] if res_ce else None
+                    if chk_ce:
+                        if "ui-state-active" not in (chk_ce.get_attribute("class") or ""):
+                            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", chk_ce)
+                            time.sleep(0.2)
+                            clicar_js(driver, chk_ce, "Cancela/Exclui outros")
+                            time.sleep(0.4)
+                            chk_ce2 = driver.execute_script(JS_FIND_CE)[0]
+                            if chk_ce2 and "ui-state-active" in (chk_ce2.get_attribute("class") or ""):
+                                log("      ✅ 'Cancela/Exclui transações de outros logins?' marcado.")
+                                houve_alt = True
+                            else:
+                                log("      [AVISO] Checkbox 'Cancela/Exclui' não marcou após clique.")
 
                     # --- Vincula logins / marca todos se lista estiver vazia ---
                     try:
@@ -687,7 +728,16 @@ def executar_logica_vincular_logins(driver, lista_logins, filtro_medicos=None):
             except Exception as e:
                 log(f"   [ERRO] Médico {i+1}: {e}")
                 fechar_janelas_travadas(driver)
+
+        # Retorna médicos do filtro que não foram encontrados na tela
+        if filtro_medicos is not None:
+            nao_encontrados = [m for m in filtro_medicos if m.upper() not in encontrados]
+            if nao_encontrados:
+                log(f"   [VINCULAR] {len(nao_encontrados)} médico(s) não encontrado(s) na secretaria.")
+            return nao_encontrados
+        return []
     except: pass
+    return []
 
 # ==============================================================================
 # MODO 2: CADASTRAR SERVIÇOS (Mantido V28)
@@ -779,7 +829,43 @@ def executar_logica_cadastrar_servicos(driver, medicos):
                 time.sleep(0.6)  # aguarda checkboxes renderizarem após o datatable
 
                 garantir_checkbox(driver, "Visualiza transações")
-                garantir_checkbox(driver, "Cancela/Exclui")
+
+                # Garante "Cancela/Exclui transações de outros logins?" via JS (mais confiável)
+                JS_FIND_CE = """
+                    var form = document.getElementById('formServico');
+                    if (!form) return [null, ''];
+                    var labels = form.querySelectorAll('label');
+                    for (var lbl of labels) {
+                        var txt = (lbl.textContent || '').trim();
+                        if (txt.indexOf('Cancela') >= 0 && txt.indexOf('outros') >= 0) {
+                            var parent = lbl.parentElement;
+                            if (parent) {
+                                var box = parent.querySelector('.ui-chkbox-box');
+                                if (box) return [box, txt];
+                            }
+                            if (parent && parent.previousElementSibling) {
+                                var box = parent.previousElementSibling.querySelector('.ui-chkbox-box');
+                                if (box) return [box, txt];
+                            }
+                        }
+                    }
+                    return [null, 'nao encontrado'];
+                """
+                res_ce = driver.execute_script(JS_FIND_CE)
+                chk_ce = res_ce[0] if res_ce else None
+                if chk_ce:
+                    if "ui-state-active" not in (chk_ce.get_attribute("class") or ""):
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", chk_ce)
+                        time.sleep(0.2)
+                        clicar_js(driver, chk_ce, "Cancela/Exclui outros")
+                        time.sleep(0.4)
+                        chk_ce2 = driver.execute_script(JS_FIND_CE)[0]
+                        if chk_ce2 and "ui-state-active" in (chk_ce2.get_attribute("class") or ""):
+                            log("      ✅ 'Cancela/Exclui transações de outros logins?' marcado.")
+                        else:
+                            log("      [AVISO] Checkbox 'Cancela/Exclui' não marcou após clique.")
+                else:
+                    log("      [AVISO] Checkbox 'Cancela/Exclui' não encontrado.")
                 
                 try:
                     chk_todas = driver.find_element(By.XPATH, "//div[contains(@class, 'ui-datatable-scrollable-header')]//div[contains(@class, 'ui-chkbox-box')]")
@@ -862,7 +948,14 @@ def executar_robo_completo(driver):
             if ui: ui.status(secretaria=sec)
             if navegar_pesquisar_secretaria(driver, sec):
                 if op == '1':
-                    executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []))
+                    filtro_json = dados.get("medicos_para_vincular") or None
+                    nao_encontrados = executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []), filtro_medicos=filtro_json)
+                    if nao_encontrados and not solicitar_finalizacao:
+                        log(f"   [AUTO-CADASTRO] {len(nao_encontrados)} médico(s) não encontrado(s) → iniciando Cadastro...")
+                        cadastrados_agora = executar_logica_cadastrar_servicos(driver, nao_encontrados)
+                        if cadastrados_agora and not solicitar_finalizacao:
+                            log(f"   [AUTO-VINCULAR] Vinculando {len(cadastrados_agora)} médico(s) recém-cadastrado(s)...")
+                            executar_logica_vincular_logins(driver, dados.get("logins_para_vincular", []), filtro_medicos=cadastrados_agora)
                 elif op == '2':
                     cadastrados = executar_logica_cadastrar_servicos(driver, dados.get("medicos_para_cadastrar", []))
                     if cadastrados:
